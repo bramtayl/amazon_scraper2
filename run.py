@@ -9,7 +9,7 @@ search_browser = new_browser()
 product_browser = new_browser()
 
 # queries_file = path.join(FOLDER, "queries.csv")
-search_results_folder = path.join(FOLDER, "local_data")
+search_results_folder = path.join(FOLDER, "search_results")
 
 download_data(
     search_browser,
@@ -22,8 +22,8 @@ download_data(
 concat((
     read_csv(
         path.join(search_results_folder, file)
-    ) for file in listdir(search_results_folder))
-).to_csv(path.join(FOLDER, "result.csv"), index = False)
+    ) for file in listdir(search_results_folder)
+)).to_csv(path.join(FOLDER, "result.csv"), index = False)
 
 search_browser.close()
 product_browser.close()

@@ -131,6 +131,7 @@ def download_data(search_browser, product_browser, queries_file, search_results_
         product_rows = []
         # no previous product, so starts empty
         old_product_name = ""
+        successful = True
         # index = 0
         # search_result = get_search_results(search_browser)[index]
         for (index, search_result) in enumerate(get_search_results(search_browser)):
@@ -175,6 +176,10 @@ def download_data(search_browser, product_browser, queries_file, search_results_
                 if len(required_choices) > 0:
                     # click the first choice I guess
                     required_choices[0].click()
+                    wait(product_browser, WAIT_TIME).until(located((
+                        By.CSS_SELECTOR,
+                        ".text-swatch-button-with-slots.a-button-selected, .image-swatch-button.a-button-selected"
+                    )))
 
                 amazon_choice_badges = product_browser.find_elements(
                     By.CSS_SELECTOR,
@@ -199,13 +204,15 @@ def download_data(search_browser, product_browser, queries_file, search_results_
 
                 prices = product_browser.find_elements(
                     By.CSS_SELECTOR,
-                    box_prefix + "#corePrice_feature_div .a-price"
+                    box_prefix + "#corePrice_feature_div .a-price, " + 
+                    box_prefix + "#booksHeaderSection span#price"
                 )
 
                 availabilities = product_browser.find_elements(
                     By.CSS_SELECTOR,
                     box_prefix + "#availability"
                 )
+                
                 if len(availabilities) == 0:
                     # assume it's available unless it says otherwise
                     available = True
@@ -252,17 +259,27 @@ def download_data(search_browser, product_browser, queries_file, search_results_
                             "#aod-offer-list"
                         )))
 
-                        # just get info about the first one I guess?
-                        product_data["current price"] = get_price(only(product_browser.find_elements(
+                        seller_prices = product_browser.find_elements(
                             By.CSS_SELECTOR,
                             "#aod-offer-list > div:first-of-type .a-price"
-                        )))
-                        delivery_widget = only(product_browser.find_elements(
+                        )
+                        if len(seller_prices) > 0:
+                            product_data["current price"] = get_price(only(seller_prices))
+                        
+                        delivery_widgets = product_browser.find_elements(
                             By.CSS_SELECTOR,
                             "#aod-offer-list > div:first-of-type span[data-csa-c-type='element']"
-                        ))
-                        product_data["shipping_cost_message"] = delivery_widget.get_attribute("data-csa-c-delivery-price")
-                        product_data["delivery_range"] = delivery_widget.get_attribute("data-csa-c-delivery-time")
+                        )
+
+                        if len(delivery_widgets) > 0:
+
+                            delivery_widget = only(delivery_widgets)
+                            product_data["shipping_cost_message"] = delivery_widget.get_attribute(
+                                "data-csa-c-delivery-price"
+                            )
+                            product_data["delivery_range"] = delivery_widget.get_attribute(
+                                "data-csa-c-delivery-time"
+                            )
 
                         # close the sellers list
                         only(product_browser.find_elements(
@@ -309,31 +326,31 @@ def download_data(search_browser, product_browser, queries_file, search_results_
                                 box_prefix + "#desktop_qualifiedBuyBox #amazonGlobal_feature_div > .a-color-secondary"
                             )).text
                 
-                standard_delivery_dates = product_browser.find_elements(
-                    By.CSS_SELECTOR,
-                    box_prefix + "#mir-layout-DELIVERY_BLOCK-slot-PRIMARY_DELIVERY_MESSAGE_LARGE .a-text-bold"
-                )
+                        standard_delivery_dates = product_browser.find_elements(
+                            By.CSS_SELECTOR,
+                            box_prefix + "#mir-layout-DELIVERY_BLOCK-slot-PRIMARY_DELIVERY_MESSAGE_LARGE .a-text-bold"
+                        )
 
-                if len(standard_delivery_dates) > 0:         
-                    product_data["standard_delivery_date"] = only(standard_delivery_dates).text
-                
-                fastest_delivery_dates = product_browser.find_elements(
-                    By.CSS_SELECTOR,
-                    box_prefix + "#mir-layout-DELIVERY_BLOCK-slot-SECONDARY_DELIVERY_MESSAGE_LARGE .a-text-bold"
-                )
-                if len(fastest_delivery_dates) > 0:
-                    product_data["fastest_delivery_date"] = only(fastest_delivery_dates).text
-                    
-                list_prices = product_browser.find_elements(By.CSS_SELECTOR, box_prefix + "#corePriceDisplay_desktop_feature_div span[data-a-strike='true']")
-                if len(list_prices) > 0:
-                    product_data["list_price"] = get_price(only(list_prices))
-                
-                prime_prices = product_browser.find_elements(
-                    By.CSS_SELECTOR,
-                    box_prefix + "#pep-signup-link .a-size-base"
-                )
-                if len(prime_prices) > 0:
-                    product_data["prime_price"] = get_price(only(prime_prices))
+                        if len(standard_delivery_dates) > 0:         
+                            product_data["standard_delivery_date"] = only(standard_delivery_dates).text
+                        
+                        fastest_delivery_dates = product_browser.find_elements(
+                            By.CSS_SELECTOR,
+                            box_prefix + "#mir-layout-DELIVERY_BLOCK-slot-SECONDARY_DELIVERY_MESSAGE_LARGE .a-text-bold"
+                        )
+                        if len(fastest_delivery_dates) > 0:
+                            product_data["fastest_delivery_date"] = only(fastest_delivery_dates).text
+                            
+                        list_prices = product_browser.find_elements(By.CSS_SELECTOR, box_prefix + "#corePriceDisplay_desktop_feature_div span[data-a-strike='true']")
+                        if len(list_prices) > 0:
+                            product_data["list_price"] = get_price(only(list_prices))
+                        
+                        prime_prices = product_browser.find_elements(
+                            By.CSS_SELECTOR,
+                            box_prefix + "#pep-signup-link .a-size-base"
+                        )
+                        if len(prime_prices) > 0:
+                            product_data["prime_price"] = get_price(only(prime_prices))
                 
                 average_ratings = product_browser.find_elements(
                     By.CSS_SELECTOR,
@@ -361,20 +378,30 @@ def download_data(search_browser, product_browser, queries_file, search_results_
                     if len(histogram_rows) != 5:
                         raise "Unexpected number of histogram rows!"
                     
-                    product_data["five_star_percentage"] = get_star_percentage(histogram_rows[0])
-                    product_data["four_star_percentage"] = get_star_percentage(histogram_rows[1])
-                    product_data["three_star_percentage"] = get_star_percentage(histogram_rows[2])
-                    product_data["two_star_percentage"] = get_star_percentage(histogram_rows[3])
-                    product_data["one_star_percentage"] = get_star_percentage(histogram_rows[4])
+                    product_data["five_star_percentage"] = get_star_percentage(
+                        histogram_rows[0]
+                    )
+                    product_data["four_star_percentage"] = get_star_percentage(
+                        histogram_rows[1]
+                    )
+                    product_data["three_star_percentage"] = get_star_percentage(
+                        histogram_rows[2]
+                    )
+                    product_data["two_star_percentage"] = get_star_percentage(
+                        histogram_rows[3])
+                    product_data["one_star_percentage"] = get_star_percentage(
+                        histogram_rows[4]
+                    )
 
                 product_rows.append(DataFrame(product_data, [0]))
             except StaleElementReferenceException:
                 # TODO: figure out why this is happening
                 print("Page refreshed during the search; try again")
+                successful = False
                 break
 
         # possible there's no results
-        if len(product_rows) > 0:
+        if successful and len(product_rows) > 0:
             concat(product_rows).to_csv(path.join(search_results_folder, query + ".csv"), index = False)
 
         # TODO:
