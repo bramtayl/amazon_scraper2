@@ -1,0 +1,4 @@
+/search_results/*
+geckodriver.log
+__pycache__
+/result.csv
