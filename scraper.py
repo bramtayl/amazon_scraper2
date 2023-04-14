@@ -53,7 +53,7 @@ def get_star_percentage(histogram_row):
     return only(histogram_row.find_elements(By.CSS_SELECTOR, ".a-text-right > .a-size-base")).text
 
 def new_browser(
-        user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.69 Safari/537.36"
+        user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.61 Safari/537.36"
 ):
     options = Options()
     # add headless to avoid the visual display and speed things up
@@ -145,6 +145,12 @@ def get_choice_sets(browser):
 
 def has_partial_buyboxes(browser):
     return len(browser.find_elements(By.CSS_SELECTOR, "#partialStateBuybox")) > 0
+
+def get_histogram_rows(browser):
+    return browser.find_elements(
+        By.CSS_SELECTOR,
+        ".cr-widget-TitleRatingsHistogram .a-histogram-row"
+    )
     
 # TODO: read the department from a csv instead
 # department = "Books"
@@ -187,11 +193,10 @@ def download_data(
                     old_product_name
             )
             # wait for the bottom of the product page to load
-            wait(browser, WAIT_TIME).until(located(
+            wait(browser, WAIT_TIME).until(located((
                 By.CSS_SELECTOR,
                 "div#navFooter"
-            ))
-            product_data = {}
+            )))
 
             product_name = get_product_name(browser)
             product_data["product_name"] = product_name
@@ -393,26 +398,23 @@ def download_data(
                         ".cr-widget-TitleRatingsHistogram div[data-hook='total-review-count']"
                     )).text
                 ).group(1)))
-                histogram_rows = browser.find_elements(
-                    By.CSS_SELECTOR,
-                    ".cr-widget-TitleRatingsHistogram .a-histogram-row"
-                )
+                histogram_rows = get_histogram_rows(browser)
                 if len(histogram_rows) != 5:
                     raise "Unexpected number of histogram rows!"
                 
                 product_data["five_star_percentage"] = get_star_percentage(
-                    histogram_rows[0]
+                    get_histogram_rows(browser)[0]
                 )
                 product_data["four_star_percentage"] = get_star_percentage(
-                    histogram_rows[1]
+                    get_histogram_rows(browser)[1]
                 )
                 product_data["three_star_percentage"] = get_star_percentage(
-                    histogram_rows[2]
+                    get_histogram_rows(browser)[2]
                 )
                 product_data["two_star_percentage"] = get_star_percentage(
-                    histogram_rows[3])
+                    get_histogram_rows(browser)[3])
                 product_data["one_star_percentage"] = get_star_percentage(
-                    histogram_rows[4]
+                    get_histogram_rows(browser)[4]
                 )
 
         # possible there's no results
