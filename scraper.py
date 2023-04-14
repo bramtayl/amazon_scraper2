@@ -186,6 +186,12 @@ def download_data(
                 lambda browser : get_product_name(browser) != 
                     old_product_name
             )
+            # wait for the bottom of the product page to load
+            wait(browser, WAIT_TIME).until(located(
+                By.CSS_SELECTOR,
+                "div#navFooter"
+            ))
+            product_data = {}
 
             product_name = get_product_name(browser)
             product_data["product_name"] = product_name
@@ -290,11 +296,10 @@ def download_data(
                     
                     delivery_widgets = browser.find_elements(
                         By.CSS_SELECTOR,
-                        "#aod-offer-list > div:first-of-type span[data-csa-c-type='element']"
+                        "#aod-offer-list > div:first-of-type #mir-layout-DELIVERY_BLOCK-slot-PRIMARY_DELIVERY_MESSAGE_LARGE span[data-csa-c-type='element']"
                     )
 
                     if len(delivery_widgets) > 0:
-
                         delivery_widget = only(delivery_widgets)
                         product_data["shipping_cost_message"] = delivery_widget.get_attribute(
                             "data-csa-c-delivery-price"
