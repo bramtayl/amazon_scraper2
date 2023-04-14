@@ -2,7 +2,6 @@ from os import path, listdir
 from pandas import DataFrame, read_csv, concat
 from re import search
 from selenium import webdriver
-from selenium.common.exceptions import StaleElementReferenceException
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.options import Options
@@ -116,29 +115,45 @@ def get_product_name(browser):
 def parse_search_result(browser, query, index):
     print("Parsing search result #{index}".format(index = index))
     product_data = {"search_term": query, "rank": index + 1}
-    amazon_index = browser.find_elements(By.CSS_SELECTOR, "div.s-main-slot.s-result-list > div[data-component-type='s-search-result']")[index].get_attribute("data-index")
-    search_prefix = "div.s-main-slot.s-result-list > div[data-index='" + amazon_index + "'] "
-
-    sponsored_tags = browser.find_elements(
+    search_result = browser.find_elements(
         By.CSS_SELECTOR,
-        search_prefix + ".puis-label-popover-default"
+        "div.s-main-slot.s-result-list > div[data-component-type='s-search-result']"
+    )[index]
+
+    sponsored_tags = search_result.find_elements(
+        By.CSS_SELECTOR,
+        ".puis-label-popover-default"
     )
     if len(sponsored_tags) > 0:
         # sanity check
         only(sponsored_tags)
         product_data["ad"] = True
     
-    product_data["url"] = only(browser.find_elements(
+    product_data["url"] = only(search_result.find_elements(
         By.CSS_SELECTOR,
         # a link in a heading
-        search_prefix + "h2 a"
+        "h2 a"
     )).get_attribute("href")
 
     return product_data
 
+def get_choice_sets(browser):
+    return browser.find_elements(
+        By.CSS_SELECTOR,
+        "#twister-plus-inline-twister > div.inline-twister-row"
+    )
+
+def has_partial_buyboxes(browser):
+    return len(browser.find_elements(By.CSS_SELECTOR, "#partialStateBuybox")) > 0
+    
 # TODO: read the department from a csv instead
 # department = "Books"
-def download_data(browser, queries_file, search_results_folder, department = "All Departments"):
+def download_data(
+        browser,
+        queries_file,
+        search_results_folder,
+        department = "All Departments"
+    ):
 
     completed_queries = set((
         path.splitext(filename)[0] for filename in listdir(search_results_folder)
@@ -160,9 +175,9 @@ def download_data(browser, queries_file, search_results_folder, department = "Al
 
         product_rows = try_run_search(browser, department, query)
             
-        # no previous product, so starts empty     
+        # no previous product, so starts empty
         old_product_name = ""
-        for (index, product_data) in enumerate(product_rows):
+        for (index, product_data) in enumerate(product_rows[0:2]):
             print("Reading product page #{index}".format(index = index))
             browser.get(product_data["url"])
 
@@ -176,18 +191,18 @@ def download_data(browser, queries_file, search_results_folder, department = "Al
             product_data["product_name"] = product_name
             old_product_name = product_name
 
-            # make a required choice
-            required_choices = browser.find_elements(
-                By.CSS_SELECTOR,
-                "#twister-plus-inline-twister ul > li.a-declarative"
-            )
-            if len(required_choices) > 0:
-                # click the first choice I guess
-                required_choices[0].click()
-                wait(browser, WAIT_TIME).until(located((
-                    By.CSS_SELECTOR,
-                    ".text-swatch-button.a-button-selected, .text-swatch-button-with-slots.a-button-selected, .image-swatch-button.a-button-selected"
-                )))
+            if has_partial_buyboxes(browser):
+                # make all selections
+                for choice_set_index in range(len(get_choice_sets(browser))):
+                    get_choice_sets(browser)[choice_set_index].find_elements(
+                        By.CSS_SELECTOR,
+                        "ul > li.a-declarative"
+                    )[0].click()
+
+                # wait for the buybox to update
+                wait(browser, WAIT_TIME).until(
+                    lambda browser : not(has_partial_buyboxes(browser))
+                )
 
             amazon_choice_badges = browser.find_elements(
                 By.CSS_SELECTOR,
@@ -212,9 +227,7 @@ def download_data(browser, queries_file, search_results_folder, department = "Al
 
             prices = browser.find_elements(
                 By.CSS_SELECTOR,
-                box_prefix + "#corePrice_feature_div .a-price, " + 
-                box_prefix + "#booksHeaderSection span#price, " +
-                box_prefix + "#usedBuySection div.a-column .offer-price"
+                box_prefix + "#corePrice_feature_div .a-price, " + box_prefix + "#booksHeaderSection span#price, " + box_prefix + "#usedBuySection div.a-column .offer-price"
             )
 
             availabilities = browser.find_elements(
