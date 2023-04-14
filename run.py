@@ -5,13 +5,13 @@ FOLDER = "/home/brandon/amazon_scraper"
 chdir(FOLDER)
 from scraper import new_browser, download_data
 
-browser = new_browser()
+browser_box = []
 
 # queries_file = path.join(FOLDER, "queries.csv")
 search_results_folder = path.join(FOLDER, "search_results")
 
 download_data(
-    browser,
+    browser_box,
     path.join(FOLDER, "queries.csv"),
     search_results_folder
 )
@@ -23,7 +23,7 @@ concat((
     ) for file in listdir(search_results_folder)
 )).to_csv(path.join(FOLDER, "result.csv"), index = False)
 
-browser.close()
+browser_box[0].close()
 
 
 
