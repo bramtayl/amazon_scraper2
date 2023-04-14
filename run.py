@@ -14,7 +14,7 @@ download_data(
     browser_box,
     path.join(FOLDER, "queries.csv"),
     search_results_folder,
-    first_user_agent_index = 5
+    first_user_agent_index = 6
 )
 
 # browser = browser_box[1]
