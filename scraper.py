@@ -236,13 +236,21 @@ def run_whole_search(browser, department, query, search_results_folder):
 
         prices = browser.find_elements(
             By.CSS_SELECTOR,
-            box_prefix + "#corePrice_feature_div .a-price, " + box_prefix + "#booksHeaderSection span#price, " + box_prefix + "#usedBuySection div.a-column .offer-price"
+            box_prefix + "#corePrice_feature_div .a-price, " + 
+            box_prefix + "#booksHeaderSection span#price, " + 
+            box_prefix + "#usedBuySection div.a-column .offer-price, " +
+            box_prefix + "#renewedBuyBoxPrice"
         )
 
         availabilities = browser.find_elements(
             By.CSS_SELECTOR,
-            box_prefix + "#availability, " + box_prefix + ".qa-buybox-block .qa-availability-message"
+            box_prefix + "#availability"
         )
+        if len(availabilities) == 0:
+            availabilities = browser.find_elements(
+                By.CSS_SELECTOR,
+                box_prefix + ".qa-buybox-block .qa-availability-message, " + box_prefix + "#exports_desktop_outOfStock_buybox_message_feature_div"
+            )
         
         if len(availabilities) == 0:
             # assume it's available unless it says otherwise
@@ -277,46 +285,67 @@ def run_whole_search(browser, department, query, search_results_folder):
                 elif len(main_prices) > 0:
                     product_data["current_price"] = get_price(only(main_prices))
             elif len(prices) == 0:
-                # for books etc. with many sellers, a single price won't show
-                # click to look at the sellers
-                only(browser.find_elements(
+                kindle_prices = browser.find_elements(
                     By.CSS_SELECTOR,
-                    box_prefix + "a[title='See All Buying Options']"
-                )).click()
-
-                # wait for the sellers list
-                wait(browser, WAIT_TIME).until(located((
-                    By.CSS_SELECTOR,
-                    "#aod-offer-list"
-                )))
-
-                seller_prices = browser.find_elements(
-                    By.CSS_SELECTOR,
-                    "#aod-offer-list > div:first-of-type .a-price"
+                    box_prefix + "#kindle-price"
                 )
-                if len(seller_prices) > 0:
-                    product_data["current price"] = get_price(only(seller_prices))
-                
-                delivery_widgets = browser.find_elements(
-                    By.CSS_SELECTOR,
-                    "#aod-offer-list > div:first-of-type #mir-layout-DELIVERY_BLOCK-slot-PRIMARY_DELIVERY_MESSAGE_LARGE span[data-csa-c-type='element']"
-                )
-
-                if len(delivery_widgets) > 0:
-                    delivery_widget = only(delivery_widgets)
-                    product_data["shipping_cost_message"] = delivery_widget.get_attribute(
-                        "data-csa-c-delivery-price"
+                if len(kindle_prices) > 0:
+                    product_data["kindle_discount"] = True
+                    #sanity check
+                    only(kindle_prices)
+                    product_data["current_price"] = parse_price(only(kindle_prices).text)
+                else:
+                    other_kindle_messages = browser.find_elements(
+                        By.CSS_SELECTOR,
+                        box_prefix + "span.no-kindle-offer-message"
                     )
-                    product_data["delivery_range"] = delivery_widget.get_attribute(
-                        "data-csa-c-delivery-time"
-                    )
+                    if len(other_kindle_messages) > 0:
+                        only(other_kindle_messages)
+                        product_data["current_price"] = only(browser.find_elements(
+                            By.CSS_SELECTOR,
+                            box_prefix + "span.a-button-selected span.a-color-price"
+                        )).text
+                    else:
+                        # for books etc. with many sellers, a single price won't show
+                        # click to look at the sellers
+                        only(browser.find_elements(
+                            By.CSS_SELECTOR,
+                            box_prefix + "a[title='See All Buying Options']"
+                        )).click()
 
-                # close the sellers list
-                only(browser.find_elements(
-                    By.CSS_SELECTOR,
-                    ".aod-close-button"
-                )).click()
-                # TODO: get more information here
+                        # wait for the sellers list
+                        wait(browser, WAIT_TIME).until(located((
+                            By.CSS_SELECTOR,
+                            "#aod-offer-list"
+                        )))
+
+                        seller_prices = browser.find_elements(
+                            By.CSS_SELECTOR,
+                            "#aod-offer-list > div:first-of-type .a-price"
+                        )
+                        if len(seller_prices) > 0:
+                            product_data["current price"] = get_price(only(seller_prices))
+                        
+                        delivery_widgets = browser.find_elements(
+                            By.CSS_SELECTOR,
+                            "#aod-offer-list > div:first-of-type #mir-layout-DELIVERY_BLOCK-slot-PRIMARY_DELIVERY_MESSAGE_LARGE span[data-csa-c-type='element']"
+                        )
+
+                        if len(delivery_widgets) > 0:
+                            delivery_widget = only(delivery_widgets)
+                            product_data["shipping_cost_message"] = delivery_widget.get_attribute(
+                                "data-csa-c-delivery-price"
+                            )
+                            product_data["delivery_range"] = delivery_widget.get_attribute(
+                                "data-csa-c-delivery-time"
+                            )
+
+                        # close the sellers list
+                        only(browser.find_elements(
+                            By.CSS_SELECTOR,
+                            ".aod-close-button"
+                        )).click()
+                        # TODO: get more information here
             else:
                 # if there's two prices, the second price is the unit price
                 if len(prices) == 2:
@@ -324,7 +353,7 @@ def run_whole_search(browser, department, query, search_results_folder):
                     product_data["unit_price"] = get_price(prices[1])
                     # not a separate element so have to extract from the text
                     
-                    product_data["unit"] = search(r"^\(\n.* \/ (.*)\)$", only(
+                    product_data["unit"] = search(r"^\(\n.* \/ ?(.*)\)$", only(
                         browser.find_elements(
                             By.CSS_SELECTOR,
                             box_prefix + "#corePrice_feature_div :not(#taxInclusiveMessage).a-size-small, #corePrice_feature_div :not(#taxInclusiveMessage).a-size-mini, #corePrice_feature_div span[data-a-size='small']:not(#taxInclusiveMessage)"
@@ -366,7 +395,10 @@ def run_whole_search(browser, department, query, search_results_folder):
                 if len(fastest_delivery_dates) > 0:
                     product_data["fastest_delivery_date"] = only(fastest_delivery_dates).text
                     
-                list_prices = browser.find_elements(By.CSS_SELECTOR, box_prefix + "#corePriceDisplay_desktop_feature_div span[data-a-strike='true']")
+                list_prices = browser.find_elements(By.CSS_SELECTOR, 
+                    box_prefix + "#corePriceDisplay_desktop_feature_div span[data-a-strike='true'], " + 
+                    box_prefix + "#print-list-price"
+                )
                 if len(list_prices) > 0:
                     product_data["list_price"] = get_price(only(list_prices))
                 
@@ -433,7 +465,8 @@ def download_data(
         browser_box,
         queries_file,
         search_results_folder,
-        department = "All Departments"
+        department = "All Departments",
+        first_user_agent_index = 0
     ):
 
     completed_queries = set((
@@ -442,7 +475,7 @@ def download_data(
 
     query_data = read_csv(queries_file)
 
-    user_agent_index = 0
+    user_agent_index = first_user_agent_index
     browser = new_browser(USER_AGENT_LIST[user_agent_index])
     browser_box.append(browser)
 
@@ -453,15 +486,22 @@ def download_data(
 
         try:
             run_whole_search(browser, department, query, search_results_folder)
-        except:
+        except Exception as an_error:
             # change the user agent and see if it works now
-            user_agent_index = user_agent_index + 1
-            if user_agent_index == len(USER_AGENT_LIST):      
-                user_agent_index = 0
-            browser_box.clear()
-            browser = new_browser(USER_AGENT_LIST[user_agent_index])
-            browser_box.append(browser)
-            run_whole_search(browser, department, query, search_results_folder)
+            foiled_agains = browser.find_elements(
+                By.CSS_SELECTOR,
+                "form[action='/errors/validateCaptcha']"
+            )
+            if len(foiled_agains) > 0:
+                only(foiled_agains)
+                user_agent_index = user_agent_index + 1
+                if user_agent_index == len(USER_AGENT_LIST):      
+                    user_agent_index = 0
+                browser = new_browser(USER_AGENT_LIST[user_agent_index])
+                browser_box.append(browser)
+                run_whole_search(browser, department, query, search_results_folder)
+            else:
+                raise an_error
             
 
         

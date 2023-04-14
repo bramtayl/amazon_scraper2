@@ -3,7 +3,7 @@ from pandas import read_csv, concat
 
 FOLDER = "/home/brandon/amazon_scraper"
 chdir(FOLDER)
-from scraper import new_browser, download_data
+from scraper import download_data
 
 browser_box = []
 
@@ -13,8 +13,11 @@ search_results_folder = path.join(FOLDER, "search_results")
 download_data(
     browser_box,
     path.join(FOLDER, "queries.csv"),
-    search_results_folder
+    search_results_folder,
+    first_user_agent_index = 5
 )
+
+# browser = browser_box[1]
 
 # piece together all search csvs into one csv
 concat((
