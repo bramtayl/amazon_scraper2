@@ -8,9 +8,6 @@ from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.support.expected_conditions import (
     presence_of_element_located as located,
 )
-from selenium.webdriver.support.expected_conditions import (
-    presence_of_all_elements_located as all_located,
-)
 from selenium.webdriver.support.ui import Select
 from selenium.webdriver.support.wait import WebDriverWait as wait
 
@@ -42,7 +39,6 @@ def only(list):
     if count != 1:
         raise IndexError(count)
     return list[0]
-
 
 # e.g. 1,000 -> 1000
 def remove_commas(a_string):
@@ -116,7 +112,7 @@ def new_browser(user_agent):
 
 # amazon sometime gives an abbreviated version of the main page with no department dropdown
 # reload until we get it
-def try_run_search(browser, department, query):
+def try_search_page(browser, department, query):
     department_menus = browser.find_elements(By.CSS_SELECTOR, "#searchDropdownBox")
 
     if len(department_menus) == 0:
@@ -130,7 +126,7 @@ def try_run_search(browser, department, query):
                 )
             )
         )
-        return try_run_search(browser, department, query)
+        return try_search_page(browser, department, query)
 
     department_menu = only(department_menus)
     print(query + ":")
@@ -171,7 +167,10 @@ def get_product_name(browser):
 
 def parse_search_result(browser, query, index):
     print("Parsing search result #{index}".format(index=index))
-    product_data = {"search_term": query, "rank": index + 1}
+    product_data = {
+        "search_term": query,
+        "rank": index + 1
+    }
     search_result = browser.find_elements(
         By.CSS_SELECTOR,
         "div.s-main-slot.s-result-list > div[data-component-type='s-search-result']",
@@ -196,12 +195,14 @@ def parse_search_result(browser, query, index):
     return product_data
 
 
+# sets of choices that one can choose from
 def get_choice_sets(browser):
     return browser.find_elements(
         By.CSS_SELECTOR, "#twister-plus-inline-twister > div.inline-twister-row"
     )
 
 
+# if buy box hasn't fully loaded because its waiting for users to make a choice
 def has_partial_buyboxes(browser):
     return len(browser.find_elements(By.CSS_SELECTOR, "#partialStateBuybox")) > 0
 
@@ -211,13 +212,21 @@ def get_histogram_rows(browser):
         By.CSS_SELECTOR, ".cr-widget-TitleRatingsHistogram .a-histogram-row"
     )
 
+def sort_then_dataframe(dictionary):
+    the_keys = list(dictionary.keys())
+    the_keys.sort()
+    sorted_dict = {key: dictionary[key] for key in the_keys}
+    return DataFrame(sorted_dict, index = [0])
 
-def run_whole_search(browser, department, query, search_results_folder):
-    product_rows = try_run_search(browser, department, query)
+# query = "fire hd 10 tablet"
+# browser = new_browser(USER_AGENT_LIST[0])
+# department = "All Departments"
+def run_search(browser, department, query, search_results_folder):
+    product_rows = try_search_page(browser, department, query)
 
     # no previous product, so starts empty
     old_product_name = ""
-    for index, product_data in enumerate(product_rows):
+    for index, product_data in enumerate(product_rows[0:3]):
         print("Reading product page #{index}".format(index=index))
         browser.get(product_data["url"])
 
@@ -252,10 +261,12 @@ def run_whole_search(browser, department, query, search_results_folder):
             only(amazon_choice_badges)
             product_data["amazons_choice"] = True
 
-        sideboxes = browser.find_elements(By.CSS_SELECTOR, "#buyBoxAccordion")
-        if len(sideboxes) > 0:
+        # buyboxes are the thing on the right side with the price etc.
+        # there might be more than one, e.g. one for new and one for used
+        buyboxes = browser.find_elements(By.CSS_SELECTOR, "#buyBoxAccordion")
+        if len(buyboxes) > 0:
             # sanity check
-            only(sideboxes)
+            only(buyboxes)
             # use data from the first side box
             box_prefix = "#buyBoxAccordion > div:first-child "
         else:
@@ -273,6 +284,8 @@ def run_whole_search(browser, department, query, search_results_folder):
             + "#renewedBuyBoxPrice",
         )
 
+        # some of these are not mutually exclusive, so try twice
+        # TODO: figure out what's going on
         availabilities = browser.find_elements(
             By.CSS_SELECTOR, box_prefix + "#availability"
         )
@@ -308,33 +321,36 @@ def run_whole_search(browser, department, query, search_results_folder):
             if len(undeliverable_messages) > 0:
                 product_data["availability"] = only(undeliverable_messages).text
                 # sometimes there's still a price even if its undeliverable
-                side_prices = browser.find_elements(
+                # these aren't mutually exclusive so check them seperately
+                buybox_prices = browser.find_elements(
                     By.CSS_SELECTOR, box_prefix + "#price_inside_buybox"
                 )
                 main_prices = browser.find_elements(
                     By.CSS_SELECTOR, "#corePrice_desktop span.a-price"
                 )
-                if len(side_prices) > 0:
-                    product_data["current_price"] = get_price(only(side_prices))
+                if len(buybox_prices) > 0:
+                    product_data["current_price"] = get_price(only(buybox_prices))
                 elif len(main_prices) > 0:
                     product_data["current_price"] = get_price(only(main_prices))
             elif len(prices) == 0:
-                kindle_prices = browser.find_elements(
+                # there's a special format for a kindle discount
+                kindle_discount_prices = browser.find_elements(
                     By.CSS_SELECTOR, box_prefix + "#kindle-price"
                 )
-                if len(kindle_prices) > 0:
+                if len(kindle_discount_prices) > 0:
                     product_data["kindle_discount"] = True
                     # sanity check
-                    only(kindle_prices)
+                    only(kindle_discount_prices)
                     product_data["current_price"] = parse_price(
-                        only(kindle_prices).text
+                        only(kindle_discount_prices).text
                     )
                 else:
-                    other_kindle_messages = browser.find_elements(
+                    # and another special format if its only available on kindle
+                    only_kindle_messages = browser.find_elements(
                         By.CSS_SELECTOR, box_prefix + "span.no-kindle-offer-message"
                     )
-                    if len(other_kindle_messages) > 0:
-                        only(other_kindle_messages)
+                    if len(only_kindle_messages) > 0:
+                        only(only_kindle_messages)
                         product_data["current_price"] = only(
                             browser.find_elements(
                                 By.CSS_SELECTOR,
@@ -458,7 +474,9 @@ def run_whole_search(browser, department, query, search_results_folder):
                     box_prefix
                     + "#corePriceDisplay_desktop_feature_div span[data-a-strike='true'], "
                     + box_prefix
-                    + "#print-list-price",
+                    + "#print-list-price "
+                    + box_prefix
+                    + "span#listPrice"
                 )
                 if len(list_prices) > 0:
                     product_data["list_price"] = get_price(only(list_prices))
@@ -513,8 +531,13 @@ def run_whole_search(browser, department, query, search_results_folder):
 
     # possible there's no results
     if len(product_rows) > 0:
-        concat((DataFrame(product_data, [0]) for product_data in product_rows)).to_csv(
-            path.join(search_results_folder, query + ".csv"), index=False
+        concat(
+            (sort_then_dataframe(product_data) for product_data in product_rows),
+            axis = 0,
+            ignore_index = True
+        ).to_csv(
+            path.join(search_results_folder, query + ".csv"),
+            index = False
         )
 
 
@@ -553,7 +576,7 @@ def download_data(
             continue
 
         try:
-            run_whole_search(browser, department, query, search_results_folder)
+            run_search(browser, department, query, search_results_folder)
         except Exception as an_error:
             # change the user agent and see if it works now
             foiled_agains = browser.find_elements(
@@ -566,9 +589,10 @@ def download_data(
                     user_agent_index = 0
                 browser = new_browser(USER_AGENT_LIST[user_agent_index])
                 browser_box.append(browser)
-                run_whole_search(browser, department, query, search_results_folder)
+                run_search(browser, department, query, search_results_folder)
             else:
                 raise an_error
+
 
         # TODO:
         # number of option boxes

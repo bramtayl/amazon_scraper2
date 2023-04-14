@@ -20,11 +20,13 @@ download_data(
 # browser = browser_box[1]
 
 # piece together all search csvs into one csv
-concat((
-    read_csv(
+concat(
+    (read_csv(
         path.join(search_results_folder, file)
-    ) for file in listdir(search_results_folder)
-)).to_csv(path.join(FOLDER, "result.csv"), index = False)
+    ) for file in listdir(search_results_folder)),
+    axis = 0,
+    ignore_index = True
+).to_csv(path.join(FOLDER, "result.csv"), index = False)
 
 browser_box[0].close()
 
