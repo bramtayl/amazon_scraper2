@@ -1,4 +1,4 @@
-from os import chdir, listdir, path
+from os import chdir, path
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.expected_conditions import (
@@ -9,7 +9,7 @@ from selenium.webdriver.support.wait import WebDriverWait as wait
 
 FOLDER = "/home/brandon/amazon_scraper"
 chdir(FOLDER)
-from utilities import dicts_to_dataframe, new_browser, only, WAIT_TIME
+from utilities import dicts_to_dataframe, get_filenames, new_browser, only, WAIT_TIME
 
 
 def wait_for_search_bar(browser):
@@ -134,9 +134,7 @@ def run_search(browser, department, query, search_results_folder):
 def run_searches(
     browser_box, query_data, search_results_folder, user_agents, user_agent_index=0
 ):
-    completed_queries = set(
-        (path.splitext(filename)[0] for filename in listdir(search_results_folder))
-    )
+    completed_queries = get_filenames(search_results_folder)
 
     browser = new_browser(user_agents[user_agent_index])
     browser_box.append(browser)

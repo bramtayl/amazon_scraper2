@@ -51,3 +51,9 @@ def combine_folder_csvs(folder):
         axis=0,
         ignore_index=True,
     )
+
+
+def get_filenames(folder):
+    return set(
+        path.splitext(filename)[0] for filename in listdir(folder)
+    )
