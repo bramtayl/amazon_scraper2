@@ -2,3 +2,5 @@
 geckodriver.log
 __pycache__
 /result.csv
+/product_pages/*
+/product_results/*

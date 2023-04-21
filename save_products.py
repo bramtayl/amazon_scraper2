@@ -5,6 +5,7 @@ from selenium.webdriver.support.expected_conditions import (
 )
 from selenium.webdriver.support.wait import WebDriverWait as wait
 from bs4 import BeautifulSoup, Comment
+import re
 
 FOLDER = "/home/brandon/amazon_scraper"
 chdir(FOLDER)
@@ -25,13 +26,32 @@ def get_choice_sets(browser):
 def has_partial_buyboxes(browser):
     return len(browser.find_elements(By.CSS_SELECTOR, "#partialStateBuybox")) > 0
 
+def is_empty_string(thing):
+    if isinstance(thing, str):
+        if not(re.search(r"^[\s]+$", thing) is None):
+            return True
+    return False
+
+def is_empty_div(thing):
+    if isinstance(thing, str):
+        # not none means there's only spaces
+        return not(re.match(r"^[\s]+$", thing) is None)
+    if thing.name != "div":
+        return False
+    return all(is_empty_div(child) for child in thing.contents)
+
 def save_page(browser, filename):
     page = BeautifulSoup(browser.page_source, features = "lxml")
-    # #skiplink, #nav-upnav, #navbar-main, #navLeftFooter
-    for style in page.select('img, map, meta, noscript, script, style, svg, video, #ad-endcap-1_feature_div, #ad-display-center-1_feature_div, #amsDetailRight_feature_div, #aplusBrandStory_feature_div, #discovery-and-inspiration_feature_div, #dp-ads-center-promo_feature_div, #dp-ads-center-promo-top_feature_div, #dp-ads-middle_feature_div, #gridgetWrapper, #HLCXComparisonWidget_feature_div, #imageBlock_feature_div, #navbar-main, #navFooter, #navtop, #nav-upnav, #percolate-ui-ilm_div, #postsSameBrandCard_feature_div, #product-ads-feedback_feature_div, #similarities_feature_div, #skiplink, #storeDisclaimer_feature_div, #va-related-videos-widget_feature_div, #valuePick_feature_div, #sims-themis-sponsored-products-2_feature_div, #sponsoredProducts2_feature_div, .reviews-display-ad'):
-        style.extract()
+    # TODO:
+    # ask-btf_feature_div is the Q&A section
+    # it would be nice to have but isn't showing up in the HTML anyway...
+    for junk in page.select('img, map, meta, noscript, script, style, svg, video, #ad-endcap-1_feature_div, #ad-display-center-1_feature_div, #amsDetailRight_feature_div, #aplusBrandStory_feature_div, #ask-btf_feature_div, #beautyRecommendations_feature_div, #discovery-and-inspiration_feature_div, #dp-ads-center-promo_feature_div, #dp-ads-center-promo-top_feature_div, #dp-ads-middle_feature_div, #gridgetWrapper, #HLCXComparisonWidget_feature_div, #imageBlock_feature_div, #navbar-main, #navFooter, #navtop, #nav-upnav, #percolate-ui-ilm_div, #postsSameBrandCard_feature_div, #product-ads-feedback_feature_div, #similarities_feature_div, #skiplink, #storeDisclaimer_feature_div, #va-related-videos-widget_feature_div, #valuePick_feature_div, #sims-themis-sponsored-products-2_feature_div, #sponsoredProducts2_feature_div, .reviews-display-ad'):
+        junk.extract()
     for comment in page(text=lambda text: isinstance(text, Comment)):
         comment.extract()
+    for div in page.select('div'):
+        if is_empty_div(div):
+            div.extract()
 
     with open(filename, "w") as file:
         file.write(str(page))
@@ -105,7 +125,7 @@ def save_products(
     old_product_name = ""
     for (product_index, product_url) in enumerate(search_results_data.loc[:, "url"]):
         
-        if product_index in completed_product_indices:
+        if str(product_index) in completed_product_indices:
             continue
         
         if product_index % 50 != 0:
