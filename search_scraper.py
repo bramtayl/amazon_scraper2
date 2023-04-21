@@ -95,6 +95,12 @@ def parse_search_result(browser, query, index):
     if limited_time_deal_label is not None:
         product_data["limited_time_deal"] = True
 
+    provenance_certifications = search_result.find_elements(
+        By.XPATH, "//*[contains(@data-s-pc-popover, 'provenanceCertifications')]"
+    )
+    if len(provenance_certifications) > 0:
+        product_data["provenance_certifications"] = provenance_certifications.text
+
     images = search_result.find_elements(
         By.CSS_SELECTOR, "img[class='s-image']"
     )
