@@ -331,6 +331,46 @@ def try_parse_product(browser, product_url, old_product_name):
             if len(prime_prices) > 0:
                 product_data["prime_price"] = get_price(only(prime_prices))
 
+            #this checks for subscription availability on subcription only products
+            subscription_legal_text = browser.find_elements(
+                By.CSS_SELECTOR, "#sndbox-legalText"
+            )
+            if len(subscription_legal_text) > 0 and "Automatically renews" in only(subscription_legal_text).text:
+                product_data["subscription"] = True
+
+            #this checks for subscription availability on subcription as an option products
+            subscription_price = browser.find_elements(
+                By.CSS_SELECTOR, "span[id='subscriptionPrice']"
+            )
+            if len(subscription_price) > 0 and "$" in only(subscription_price).text:
+                product_data["subscription_price"] = True
+
+            return_policy_text = browser.find_elements(
+                    By.CSS_SELECTOR, "#productSupportAndReturnPolicy-return-policy-anchor-text"
+            )
+
+            if len(return_policy_text) > 0:
+                product_data["return_policy"] = only(return_policy_text).text
+            else:
+                amazon_renewed_check = browser.find_elements(
+                    By.CSS_SELECTOR, "#bylineInfo_feature_div .a-link-normal"
+                )
+                if len(amazon_renewed_check) > 0 and only(amazon_renewed_check).text == "Visit the Amazon Renewed Store":
+                    product_data["return_policy"] = "Amazon Renewed"
+
+    category_navigation_widget = browser.find_elements(By.CSS_SELECTOR, "#wayfinding-breadcrumbs_feature_div")
+
+    if len(category_navigation_widget) > 0:
+        category_links = category_navigation_widget[0].find_elements(
+            By.CSS_SELECTOR, "a[class='a-link-normal a-color-tertiary']"
+        )
+
+        for i, link in enumerate(category_links[:5]):
+            if link and link.text:
+                product_data[f"sub_category_{i}"] = link.text.replace("\n", "").replace(" ", "")
+            else:
+                product_data[f"sub_category_{i}"] = None
+
     average_ratings = browser.find_elements(
         By.CSS_SELECTOR,
         ".cr-widget-TitleRatingsHistogram span[data-hook='rating-out-of-text']",

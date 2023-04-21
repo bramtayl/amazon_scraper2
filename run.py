@@ -46,10 +46,9 @@ for browser in browser_box:
 # name of the selected sidebar box
 # number of sellers (for items with multiple sellers)
 # coupons
-# categories
 # seller name
-# whether eligable for refund
-# whether limited time deal
-# whether small business icon
-# whether bundles available
-# whether subscription available
+
+# whether subscription available (done two formats maybe more out there)
+# whether eligable for refund (doneish)
+# whether bundles available (ignore maybe)
+
