@@ -1,9 +1,11 @@
 from os import chdir, path
 from selenium.webdriver.common.by import By
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.support.expected_conditions import (
     presence_of_element_located as located,
 )
 from selenium.webdriver.support.wait import WebDriverWait as wait
+
 from bs4 import BeautifulSoup, Comment
 import re
 
@@ -12,9 +14,14 @@ chdir(FOLDER)
 from utilities import get_filenames, new_browser, only, WAIT_TIME
 
 def get_product_name(browser):
-    return only(
-        browser.find_elements(By.CSS_SELECTOR, "span#productTitle, span.qa-title-text")
-    ).text
+    title_elements = browser.find_elements(By.CSS_SELECTOR, "span#productTitle, span.qa-title-text, h1[data-automation-id='title']")
+    if len(title_elements) > 0:
+        return only(title_elements).text
+    
+    return only(browser.find_elements(
+        By.CSS_SELECTOR,
+        "h1[data-testid='title-art'] img"
+    )).get_attribute("alt")
 
 # sets of choices that one can choose from
 def get_choice_sets(browser):
@@ -56,13 +63,37 @@ def save_page(browser, filename):
     with open(filename, "w") as file:
         file.write(str(page))
 
+class FoiledAgainError(Exception):
+    pass
+
+class GoneError(Exception):
+    pass
+
 def try_save_product(browser, product_index, product_url, old_product_name, product_pages_folder):
     browser.get(product_url)
 
-    # wait for a new product
-    wait(browser, WAIT_TIME).until(
-        lambda browser: get_product_name(browser) != old_product_name
-    )
+    try:
+        # wait for a new product
+        wait(browser, WAIT_TIME).until(
+            lambda browser: get_product_name(browser) != old_product_name
+        )
+    except IndexError as an_error:
+        gones = browser.find_elements(
+            By.CSS_SELECTOR, "img[alt=\"Sorry! We couldn't find that page. Try searching or go to Amazon's home page.\"]"
+        )
+        if len(gones) > 0:
+            only(gones)
+            raise GoneError()
+        
+        foiled_agains = browser.find_elements(
+            By.CSS_SELECTOR, "form[action='/errors/validateCaptcha']"
+        )
+        if len(foiled_agains) > 0:
+            only(foiled_agains)
+            raise FoiledAgainError()
+        
+        raise an_error
+
     # wait for the bottom of the product page to load
     wait(browser, WAIT_TIME).until(located((By.CSS_SELECTOR, "div#navFooter")))
 
@@ -127,9 +158,6 @@ def save_products(
         
         if str(product_index) in completed_product_indices:
             continue
-        
-        if product_index % 50 != 0:
-            continue
 
         print(str(product_index) + ": " + product_url)
 
@@ -137,22 +165,28 @@ def save_products(
             try_save_product(
                 browser, product_index, product_url, old_product_name, product_pages_folder
             )
-        except Exception as an_error:
-            # change the user agent and see if it works now
-            foiled_agains = browser.find_elements(
-                By.CSS_SELECTOR, "form[action='/errors/validateCaptcha']"
-            )
-            if len(foiled_agains) > 0:
-                only(foiled_agains)
-                user_agent_index = user_agent_index + 1
-                if user_agent_index == len(user_agents):
-                    user_agent_index = 0
-                browser = new_browser(user_agents[user_agent_index])
-                browser_box.append(browser)
+        except GoneError:
+            print("Page no longer exists, skipping")
+            continue
+        except TimeoutException:
+            print("Timeout, skipping")
+            continue
+        except FoiledAgainError:
+            user_agent_index = user_agent_index + 1
+            if user_agent_index == len(user_agents):
+                user_agent_index = 0
+            browser = new_browser(user_agents[user_agent_index])
+            browser_box.append(browser)
+            try:
                 try_save_product(
                     browser, product_index, product_url, old_product_name, product_pages_folder
                 )
-            else:
-                raise an_error
+            except GoneError:
+                print("Page no longer exists, skipping")
+                continue
+            except TimeoutException:
+                print("Timeout, skipping")
+                continue
+
 
     return user_agent_index

@@ -15,7 +15,7 @@ browser_box = []
 search_results_folder = path.join(FOLDER, "search_results")
 product_pages_folder = path.join(FOLDER, "product_pages")
 
-user_agent_index = 0
+user_agent_index = 4
 user_agent_index = run_searches(
     browser_box,
     query_data,
@@ -35,7 +35,8 @@ user_agent_index = save_products(
 )
 
 combine_folder_csvs(product_results_folder).to_csv("result.csv")
-
+browser = browser_box[4]
+browser.get("https://www.amazon.com")
 for browser in browser_box:
     browser.close()
 

@@ -1,4 +1,4 @@
-from os import chdir, path
+from os import chdir, listdir, path
 from re import search
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.expected_conditions import (
@@ -420,7 +420,7 @@ def try_parse_product(browser, product_url, old_product_name):
 # department = "All Departments"
 def scrape_products(
     browser_box,
-    search_results_data,
+    product_pages_folder,
     product_results_folder,
     user_agents,
     user_agent_index=0,

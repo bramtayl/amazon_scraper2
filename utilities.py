@@ -26,6 +26,7 @@ def new_browser(user_agent):
     browser = webdriver.Firefox(options=options)
     # selenium sputters when scripts run too long so set a timeout
     browser.set_script_timeout(WAIT_TIME)
+    browser.set_page_load_timeout(WAIT_TIME)
 
     return browser
 
