@@ -6,6 +6,7 @@ chdir(FOLDER)
 from utilities import combine_folder_csvs
 from search_scraper import run_searches
 from save_products import save_products
+from product_scraper import scrape_products
 
 query_data = read_csv(path.join(FOLDER, "queries.csv"))
 user_agents = read_csv(path.join(FOLDER, "user_agents.csv")).loc[:, "user_agent"]
@@ -34,11 +35,12 @@ user_agent_index = save_products(
     user_agent_index=user_agent_index,
 )
 
-combine_folder_csvs(product_results_folder).to_csv("result.csv")
-browser = browser_box[4]
-browser.get("https://www.amazon.com")
 for browser in browser_box:
     browser.close()
+
+scrape_products(product_pages_folder).to_csv(path.join(FOLDER, "result.csv"))
+
+
 
 # TODO:
 # number of option boxes
@@ -52,4 +54,7 @@ for browser in browser_box:
 # whether subscription available (done two formats maybe more out there)
 # whether eligable for refund (doneish)
 # whether bundles available (ignore maybe)
+
+# page no longer exists: https://www.amazon.com/gp/slredirect/picassoRedirect.html/ref=pa_sp_mtf_aps_sr_pg1_1?ie=UTF8&adId=A04276923NGE1Z8ZND0Z1&qualifier=1681822641&id=4761451586758343&widgetName=sp_mtf&url=%2FBondelid-Soccer-Jerseys-T-Shirt-Outdoor%2Fdp%2FB0BVB2DZVM%2Fref%3Dsr_1_38_sspa%3Fkeywords%3Dfc%2Bbarcelona%2Bjersey%26qid%3D1681822641%26sr%3D8-38-spons%26psc%3D1
+# title is image: https://www.amazon.com/Wing-Prayer-Dennis-Quaid/dp/B0B75TB7H8/ref=sr_1_15?keywords=dvd+movies&qid=1681822652&sr=8-15
 
