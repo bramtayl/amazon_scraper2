@@ -1,9 +1,15 @@
+from bs4 import BeautifulSoup, Comment
 from os import listdir, path
+import re
 from pandas import concat, DataFrame, read_csv
+from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.options import Options
 from selenium import webdriver
 
 WAIT_TIME = 20
+
+class FoiledAgainError(Exception):
+    pass
 
 
 # throw an error if there isn't one and only one result
@@ -58,3 +64,35 @@ def get_filenames(folder):
     return set(
         path.splitext(filename)[0] for filename in listdir(folder)
     )
+
+def check_captcha(browser):
+    foiled_agains = browser.find_elements(
+        By.CSS_SELECTOR, "form[action='/errors/validateCaptcha']"
+    )
+    if len(foiled_agains) > 0:
+        only(foiled_agains)
+        raise FoiledAgainError()
+
+def is_empty_div(thing):
+    if isinstance(thing, str):
+        # not none means there's only spaces
+        return not(re.match(r"^[\s]+$", thing) is None)
+    if thing.name != "div":
+        return False
+    return all(is_empty_div(child) for child in thing.contents)
+
+def save_page(browser, junk_css, filename):
+    page = BeautifulSoup(browser.page_source, features = "lxml")
+    # TODO:
+    # ask-btf_feature_div is the Q&A section
+    # it would be nice to have but isn't showing up in the HTML anyway...
+    for junk in page.select(junk_css):
+        junk.extract()
+    for comment in page(text=lambda text: isinstance(text, Comment)):
+        comment.extract()
+    for div in page.select('div'):
+        if is_empty_div(div):
+            div.extract()
+
+    with open(filename, "w") as file:
+        file.write(str(page))

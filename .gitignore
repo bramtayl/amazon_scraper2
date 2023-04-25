@@ -1,6 +1,8 @@
-/search_results/*
 geckodriver.log
 __pycache__
 /result.csv
-/product_pages/*
-/product_results/*
+/data/search_logs/*
+/data/search_pages/*
+/data/search_results/*
+/data/product_pages/*
+/data/product_results/*

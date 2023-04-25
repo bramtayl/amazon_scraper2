@@ -21,7 +21,7 @@ def get_price(price_widget):
                 remove_commas(
                     only(
                         price_widget.select(".a-price-whole")
-                    ).text
+                    ).text.strip()
                 )
                 # cents
             )
@@ -29,14 +29,14 @@ def get_price(price_widget):
                 remove_commas(
                     only(
                         price_widget.select(".a-price-fraction")
-                    ).text
+                    ).text.strip()
                 )
             )
             / 100
         )
     else:
         # others are all together
-        return parse_price(price_widget.text)
+        return parse_price(price_widget.text.strip())
 
 
 def parse_price(price_string):
@@ -47,13 +47,7 @@ def parse_price(price_string):
 def get_star_percentage(histogram_row):
     return only(
         histogram_row.select(".a-text-right > .a-size-base")
-    ).text
-
-
-def get_product_name(page):
-    return only(
-        page.select("span#productTitle, span.qa-title-text")
-    ).text
+    ).text.strip()
 
 
 # sets of choices that one can choose from
@@ -76,10 +70,11 @@ def get_histogram_rows(page):
 def get_product_name(page):
     title_elements = page.select("span#productTitle, span.qa-title-text, h1[data-automation-id='title']")
     if len(title_elements) > 0:
-        return only(title_elements).text
+        return only(title_elements).text.strip()
     
     return only(page.select("h1[data-testid='title-art'] img"))["alt"]
 
+# filename = "380"
 def scrape_products(product_pages_folder):
     product_rows = []
     for filename in get_filenames(product_pages_folder):
@@ -90,9 +85,49 @@ def scrape_products(product_pages_folder):
             page = BeautifulSoup(file, 'lxml')
             try:
                 product_data["product_name"] = get_product_name(page)
-            except Exception:
+                average_ratings = page.select(
+                    ".cr-widget-TitleRatingsHistogram span[data-hook='rating-out-of-text']",
+                )
+                if len(average_ratings) > 0:
+                    # TODO: sanity check verify no ratings
+                    product_data["average_rating"] = float(
+                        re.search(r"^(.*) out of 5$", only(average_ratings).text.strip()).group(1)
+                    )
+                    product_data["number_of_ratings"] = int(
+                        remove_commas(
+                            re.search(
+                                r"^(.*) global ratings?$",
+                                only(
+                                    page.select(".cr-widget-TitleRatingsHistogram div[data-hook=\"total-review-count\"], .cr-widget-TitleRatingsHistogram span[data-hook=\"total-review-count\"]")
+                                ).text.strip(),
+                            ).group(1)
+                        )
+                    )
+                    histogram_rows = page.select(
+                        ".cr-widget-TitleRatingsHistogram .a-histogram-row"
+                    )
+                    if len(histogram_rows) != 5:
+                        raise "Unexpected number of histogram rows!"
+
+                    product_data["five_star_percentage"] = get_star_percentage(
+                        histogram_rows[0]
+                    )
+                    product_data["four_star_percentage"] = get_star_percentage(
+                        histogram_rows[1]
+                    )
+                    product_data["three_star_percentage"] = get_star_percentage(
+                        histogram_rows[2]
+                    )
+                    product_data["two_star_percentage"] = get_star_percentage(
+                        histogram_rows[3]
+                    )
+                    product_data["one_star_percentage"] = get_star_percentage(
+                        histogram_rows[4]
+                    )
+            except Exception as exception:
                 print(filename)
-                print("error!")
+                file.close()
+                raise exception
             # product_name = get_product_name(page)
             # product_data["product_name"] = product_name
 
@@ -151,7 +186,7 @@ def scrape_products(product_pages_folder):
             #     # assume it's available unless it says otherwise
             #     available = True
             # else:
-            #     availability = only(availabilities).text
+            #     availability = only(availabilities).text.strip()
             #     product_data["availability"] = availability
             #     available = not (
             #         availability
@@ -168,7 +203,7 @@ def scrape_products(product_pages_folder):
 
             # if available:
             #     if len(undeliverable_messages) > 0:
-            #         product_data["availability"] = only(undeliverable_messages).text
+            #         product_data["availability"] = only(undeliverable_messages).text.strip()
             #         # sometimes there's still a price even if its undeliverable
             #         # these aren't mutually exclusive so check them seperately
             #         buybox_prices = page.select(
@@ -191,7 +226,7 @@ def scrape_products(product_pages_folder):
             #             # sanity check
             #             only(kindle_discount_prices)
             #             product_data["current_price"] = parse_price(
-            #                 only(kindle_discount_prices).text
+            #                 only(kindle_discount_prices).text.strip()
             #             )
             #         else:
             #             # and another special format if its only available on kindle
@@ -205,7 +240,7 @@ def scrape_products(product_pages_folder):
             #                         By.CSS_SELECTOR,
             #                         box_prefix + "span.a-button-selected span.a-color-price",
             #                     )
-            #                 ).text
+            #                 ).text.strip()
             #             else:
             #                 # for books etc. with many sellers, a single price won't show
             #                 # click to look at the sellers
@@ -257,7 +292,7 @@ def scrape_products(product_pages_folder):
             #                         box_prefix
             #                         + "#corePrice_feature_div :not(#taxInclusiveMessage).a-size-small, #corePrice_feature_div :not(#taxInclusiveMessage).a-size-mini, #corePrice_feature_div span[data-a-size='small']:not(#taxInclusiveMessage)",
             #                     )
-            #                 ).text,
+            #                 ).text.strip(),
             #             ).group(1)
             #         else:
             #             # sanity check: make sure there's only one price
@@ -269,7 +304,7 @@ def scrape_products(product_pages_folder):
             #             + "div[tabular-attribute-name='Ships from'] .tabular-buybox-text-message",
             #         )
             #         if len(shipped_bys) > 0:
-            #             product_data["shipped_by"] = only(shipped_bys).text
+            #             product_data["shipped_by"] = only(shipped_bys).text.strip()
 
             #         shipping_cost_messages = page.select(
             #             By.CSS_SELECTOR,
@@ -283,7 +318,7 @@ def scrape_products(product_pages_folder):
             #         if len(shipping_cost_messages) > 0:
             #             product_data["shipping_cost_message"] = only(
             #                 shipping_cost_messages
-            #             ).text
+            #             ).text.strip()
 
             #         standard_delivery_dates = page.select(
             #             By.CSS_SELECTOR,
@@ -294,7 +329,7 @@ def scrape_products(product_pages_folder):
             #         if len(standard_delivery_dates) > 0:
             #             product_data["standard_delivery_date"] = only(
             #                 standard_delivery_dates
-            #             ).text
+            #             ).text.strip()
 
             #         fastest_delivery_dates = page.select(
             #             By.CSS_SELECTOR,
@@ -304,7 +339,7 @@ def scrape_products(product_pages_folder):
             #         if len(fastest_delivery_dates) > 0:
             #             product_data["fastest_delivery_date"] = only(
             #                 fastest_delivery_dates
-            #             ).text
+            #             ).text.strip()
 
             #         list_prices = page.select(
             #             By.CSS_SELECTOR,
@@ -328,14 +363,14 @@ def scrape_products(product_pages_folder):
             #         subscription_legal_text = page.select(
             #             "#sndbox-legalText"
             #         )
-            #         if len(subscription_legal_text) > 0 and "Automatically renews" in only(subscription_legal_text).text:
+            #         if len(subscription_legal_text) > 0 and "Automatically renews" in only(subscription_legal_text).text.strip():
             #             product_data["subscription"] = True
 
             #         #this checks for subscription availability on subcription as an option products
             #         subscription_price = page.select(
             #             "span[id='subscriptionPrice']"
             #         )
-            #         if len(subscription_price) > 0 and "$" in only(subscription_price).text:
+            #         if len(subscription_price) > 0 and "$" in only(subscription_price).text.strip():
             #             product_data["subscription_price"] = True
 
             #         return_policy_text = page.select(
@@ -343,12 +378,12 @@ def scrape_products(product_pages_folder):
             #         )
 
             #         if len(return_policy_text) > 0:
-            #             product_data["return_policy"] = only(return_policy_text).text
+            #             product_data["return_policy"] = only(return_policy_text).text.strip()
             #         else:
             #             amazon_renewed_check = page.select(
             #                 "#bylineInfo_feature_div .a-link-normal"
             #             )
-            #             if len(amazon_renewed_check) > 0 and only(amazon_renewed_check).text == "Visit the Amazon Renewed Store":
+            #             if len(amazon_renewed_check) > 0 and only(amazon_renewed_check).text.strip() == "Visit the Amazon Renewed Store":
             #                 product_data["return_policy"] = "Amazon Renewed"
 
             # category_navigation_widget = page.select("#wayfinding-breadcrumbs_feature_div")
@@ -359,53 +394,13 @@ def scrape_products(product_pages_folder):
             #     )
 
             #     for i, link in enumerate(category_links[:5]):
-            #         if link and link.text:
-            #             product_data[f"sub_category_{i}"] = link.text.replace("\n", "").replace(" ", "")
+            #         if link and link.text.strip():
+            #             product_data[f"sub_category_{i}"] = link.text.strip().replace("\n", "").replace(" ", "")
             #         else:
             #             product_data[f"sub_category_{i}"] = None
 
-            # average_ratings = page.select(
-            #     By.CSS_SELECTOR,
-            #     ".cr-widget-TitleRatingsHistogram span[data-hook='rating-out-of-text']",
-            # )
-            # if len(average_ratings) > 0:
-            #     # TODO: sanity check verify no ratings
-            #     product_data["average_rating"] = float(
-            #         select(r"^(.*) out of 5$", only(average_ratings).text).group(1)
-            #     )
-            #     product_data["number_of_ratings"] = int(
-            #         remove_commas(
-            #             select(
-            #                 r"^(.*) global ratings?$",
-            #                 only(
-            #                     page.select(
-            #                         By.CSS_SELECTOR,
-            #                         ".cr-widget-TitleRatingsHistogram div[data-hook='total-review-count']",
-            #                     )
-            #                 ).text,
-            #             ).group(1)
-            #         )
-            #     )
-            #     histogram_rows = get_histogram_rows(page)
-            #     if len(histogram_rows) != 5:
-            #         raise "Unexpected number of histogram rows!"
-
-            #     product_data["five_star_percentage"] = get_star_percentage(
-            #         get_histogram_rows(page)[0]
-            #     )
-            #     product_data["four_star_percentage"] = get_star_percentage(
-            #         get_histogram_rows(page)[1]
-            #     )
-            #     product_data["three_star_percentage"] = get_star_percentage(
-            #         get_histogram_rows(page)[2]
-            #     )
-            #     product_data["two_star_percentage"] = get_star_percentage(
-            #         get_histogram_rows(page)[3]
-            #     )
-            #     product_data["one_star_percentage"] = get_star_percentage(
-            #         get_histogram_rows(page)[4]
-            #     )
             file.close()
             product_rows.append(product_data)
+    
     return dicts_to_dataframe(product_rows)
 

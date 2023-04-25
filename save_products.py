@@ -1,4 +1,5 @@
 from os import chdir, path
+import re
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.support.expected_conditions import (
@@ -6,12 +7,12 @@ from selenium.webdriver.support.expected_conditions import (
 )
 from selenium.webdriver.support.wait import WebDriverWait as wait
 
-from bs4 import BeautifulSoup, Comment
-import re
-
 FOLDER = "/home/brandon/amazon_scraper"
 chdir(FOLDER)
-from utilities import get_filenames, new_browser, only, WAIT_TIME
+from utilities import FoiledAgainError, get_filenames, new_browser, only, save_page, WAIT_TIME
+
+class GoneError(Exception):
+    pass
 
 def get_product_name(browser):
     title_elements = browser.find_elements(By.CSS_SELECTOR, "span#productTitle, span.qa-title-text, h1[data-automation-id='title']")
@@ -39,35 +40,9 @@ def is_empty_string(thing):
             return True
     return False
 
-def is_empty_div(thing):
-    if isinstance(thing, str):
-        # not none means there's only spaces
-        return not(re.match(r"^[\s]+$", thing) is None)
-    if thing.name != "div":
-        return False
-    return all(is_empty_div(child) for child in thing.contents)
 
-def save_page(browser, filename):
-    page = BeautifulSoup(browser.page_source, features = "lxml")
-    # TODO:
-    # ask-btf_feature_div is the Q&A section
-    # it would be nice to have but isn't showing up in the HTML anyway...
-    for junk in page.select('map, meta, noscript, script, style, svg, video, #ad-endcap-1_feature_div, #ad-display-center-1_feature_div, #amsDetailRight_feature_div, #aplusBrandStory_feature_div, #ask-btf_feature_div, #beautyRecommendations_feature_div, #discovery-and-inspiration_feature_div, #dp-ads-center-promo_feature_div, #dp-ads-center-promo-top_feature_div, #dp-ads-middle_feature_div, #gridgetWrapper, #HLCXComparisonWidget_feature_div, #imageBlock_feature_div, #navbar-main, #navFooter, #navtop, #nav-upnav, #percolate-ui-ilm_div, #postsSameBrandCard_feature_div, #product-ads-feedback_feature_div, #similarities_feature_div, #skiplink, #storeDisclaimer_feature_div, #va-related-videos-widget_feature_div, #valuePick_feature_div, #sims-themis-sponsored-products-2_feature_div, #sponsoredProducts2_feature_div, .reviews-display-ad'):
-        junk.extract()
-    for comment in page(text=lambda text: isinstance(text, Comment)):
-        comment.extract()
-    for div in page.select('div'):
-        if is_empty_div(div):
-            div.extract()
+JUNK_CSS = "map, meta, noscript, script, style, svg, video, #ad-endcap-1_feature_div, #ad-display-center-1_feature_div, #amsDetailRight_feature_div, #aplusBrandStory_feature_div, #ask-btf_feature_div, #beautyRecommendations_feature_div, #discovery-and-inspiration_feature_div, #dp-ads-center-promo_feature_div, #dp-ads-center-promo-top_feature_div, #dp-ads-middle_feature_div, #gridgetWrapper, #HLCXComparisonWidget_feature_div, #imageBlock_feature_div, #navbar-main, #navFooter, #navtop, #nav-upnav, #percolate-ui-ilm_div, #postsSameBrandCard_feature_div, #product-ads-feedback_feature_div, #similarities_feature_div, #skiplink, #storeDisclaimer_feature_div, #va-related-videos-widget_feature_div, #valuePick_feature_div, #sims-themis-sponsored-products-2_feature_div, #sponsoredProducts2_feature_div, .reviews-display-ad"
 
-    with open(filename, "w") as file:
-        file.write(str(page))
-
-class FoiledAgainError(Exception):
-    pass
-
-class GoneError(Exception):
-    pass
 
 def try_save_product(browser, product_index, product_url, old_product_name, product_pages_folder):
     browser.get(product_url)
@@ -121,7 +96,7 @@ def try_save_product(browser, product_index, product_url, old_product_name, prod
     else:
         box_prefix = ""
     
-    save_page(browser, path.join(product_pages_folder, str(product_index) + ".html"))
+    save_page(browser, JUNK_CSS, path.join(product_pages_folder, str(product_index) + ".html"))
     
     choose_seller_buttons = browser.find_elements(
         By.CSS_SELECTOR,
@@ -135,7 +110,7 @@ def try_save_product(browser, product_index, product_url, old_product_name, prod
             located((By.CSS_SELECTOR, "#aod-offer-list"))
         )
 
-        save_page(browser, path.join(product_pages_folder, str(product_index) + "-sellers.html"))
+        save_page(browser, JUNK_CSS, path.join(product_pages_folder, str(product_index) + "-sellers.html"))
 
 # query = "chemistry textbook"
 # browser = new_browser("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.69 Safari/537.36")
