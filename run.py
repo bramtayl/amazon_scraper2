@@ -5,6 +5,7 @@ FOLDER = "/home/brandon/amazon_scraper"
 chdir(FOLDER)
 from utilities import combine_folder_csvs
 from save_searches import save_searches
+from search_scraper import scrape_searches
 from save_products import save_products
 from product_scraper import scrape_products
 
@@ -29,11 +30,11 @@ user_agent_index = save_searches(
     user_agent_index=user_agent_index,
 )
 
-search_results = combine_folder_csvs(search_results_folder)
+search_results = scrape_searches(search_pages_folder)
 
 user_agent_index = save_products(
     browser_box,
-    search_results,
+    search_results.loc[:, "url"],
     product_pages_folder,
     user_agents,
     user_agent_index=user_agent_index,

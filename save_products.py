@@ -117,7 +117,7 @@ def try_save_product(browser, product_index, product_url, old_product_name, prod
 # product_url = search_results.loc[:, "url"][1000]
 def save_products(
     browser_box,
-    search_results_data,
+    urls,
     product_pages_folder,
     user_agents,
     user_agent_index=0,
@@ -129,7 +129,7 @@ def save_products(
 
     # no previous product, so starts empty
     old_product_name = ""
-    for (product_index, product_url) in enumerate(search_results_data.loc[:, "url"]):
+    for (product_index, product_url) in enumerate(urls):
         
         if str(product_index) in completed_product_indices:
             continue
