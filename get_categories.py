@@ -1,8 +1,11 @@
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait as wait
-from selenium.webdriver.support.expected_conditions import presence_of_element_located as located
+from selenium.webdriver.support.expected_conditions import (
+    presence_of_element_located as located,
+)
 from pandas import DataFrame
+
 
 def add_sub_categories(parents, children, browser, parent, child, level):
     child_text = child.text
@@ -18,10 +21,11 @@ def add_sub_categories(parents, children, browser, parent, child, level):
             browser,
             child_text,
             browser.find_elements(By.CSS_SELECTOR, selector)[index],
-            level + 1
+            level + 1,
         )
         wait(browser, 20).until(located((By.CSS_SELECTOR, "#zg-left-col")))
     browser.back()
+
 
 def get_category_tree(browser):
     browser.get("https://www.amazon.co.uk/Best-Sellers/zgbs")
@@ -36,12 +40,13 @@ def get_category_tree(browser):
             browser,
             "",
             browser.find_elements(By.CSS_SELECTOR, main_selector)[index],
-            0
+            0,
         )
         wait(browser, 20).until(located((By.CSS_SELECTOR, main_selector)))
     return DataFrame({"parent": parents, "child": children})
 
+
 browser = webdriver.Firefox()
 tree = get_category_tree()
-tree.to_csv("category_tree.csv", index = False)
+tree.to_csv("category_tree.csv", index=False)
 browser.quit()

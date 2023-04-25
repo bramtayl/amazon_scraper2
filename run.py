@@ -3,25 +3,25 @@ from pandas import read_csv
 
 FOLDER = "/home/brandon/amazon_scraper"
 chdir(FOLDER)
-from utilities import combine_folder_csvs
-from save_searches import save_searches
-from search_scraper import scrape_searches
-from save_products import save_products
-from product_scraper import scrape_products
+
+from search_saver import save_search_pages
+from search_parser import parse_search_pages
+from product_saver import save_product_pages
+from product_parser import parse_product_pages
 
 browser_box = []
 
-# TODO: product logs
 query_data = read_csv(path.join(FOLDER, "data", "queries.csv"))
 user_agents = read_csv(path.join(FOLDER, "user_agents.csv")).loc[:, "user_agent"]
 search_logs_folder = path.join(FOLDER, "data", "search_logs")
 search_pages_folder = path.join(FOLDER, "data", "search_pages")
 search_results_folder = path.join(FOLDER, "data", "search_results")
+product_logs_folder = path.join(FOLDER, "data", "product_logs")
 product_pages_folder = path.join(FOLDER, "data", "product_pages")
 product_results_folder = path.join(FOLDER, "data", "product_results")
 
-user_agent_index = 4
-user_agent_index = save_searches(
+user_agent_index = 0
+user_agent_index = save_search_pages(
     browser_box,
     query_data,
     search_logs_folder,
@@ -30,11 +30,12 @@ user_agent_index = save_searches(
     user_agent_index=user_agent_index,
 )
 
-search_results = scrape_searches(search_pages_folder)
+search_results_data = parse_search_pages(search_pages_folder)
 
-user_agent_index = save_products(
+user_agent_index = save_product_pages(
     browser_box,
-    search_results.loc[:, "url"],
+    search_results_data,
+    product_logs_folder,
     product_pages_folder,
     user_agents,
     user_agent_index=user_agent_index,
@@ -43,7 +44,7 @@ user_agent_index = save_products(
 for browser in browser_box:
     browser.close()
 
-scrape_products(product_pages_folder).to_csv(path.join(FOLDER, "result.csv"))
+# parse_product_pages(product_pages_folder).to_csv(path.join(FOLDER, "result.csv"))
 
 # TODO:
 # number of option boxes
@@ -62,4 +63,3 @@ scrape_products(product_pages_folder).to_csv(path.join(FOLDER, "result.csv"))
 # movie_title: https://www.amazon.com/Avatar-Way-Water-Sam-Worthington/dp/B0B72TVT92/ref=sr_1_14?keywords=dvd+movies&qid=1681822652&sr=8-14
 # title is image: https://www.amazon.com/Wing-Prayer-Dennis-Quaid/dp/B0B75TB7H8/ref=sr_1_15?keywords=dvd+movies&qid=1681822652&sr=8-15
 # total review count is a span: https://www.amazon.com/Metallic-Glitter-Comforter-Printed-Bedding/dp/B09CT6C3N9/ref=sr_1_54?keywords=queen+comforter+set&qid=1681822595&sr=8-54
-

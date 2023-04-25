@@ -4,5 +4,6 @@ __pycache__
 /data/search_logs/*
 /data/search_pages/*
 /data/search_results/*
+/data/product_logs/*
 /data/product_pages/*
 /data/product_results/*

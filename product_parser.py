@@ -6,6 +6,7 @@ FOLDER = "/home/brandon/amazon_scraper"
 chdir(FOLDER)
 from utilities import dicts_to_dataframe, get_filenames, only
 
+
 # e.g. 1,000 -> 1000
 def remove_commas(a_string):
     return a_string.replace(",", "")
@@ -18,18 +19,12 @@ def get_price(price_widget):
         # dollars
         return (
             int(
-                remove_commas(
-                    only(
-                        price_widget.select(".a-price-whole")
-                    ).text.strip()
-                )
+                remove_commas(only(price_widget.select(".a-price-whole")).text.strip())
                 # cents
             )
             + int(
                 remove_commas(
-                    only(
-                        price_widget.select(".a-price-fraction")
-                    ).text.strip()
+                    only(price_widget.select(".a-price-fraction")).text.strip()
                 )
             )
             / 100
@@ -45,16 +40,12 @@ def parse_price(price_string):
 
 
 def get_star_percentage(histogram_row):
-    return only(
-        histogram_row.select(".a-text-right > .a-size-base")
-    ).text.strip()
+    return only(histogram_row.select(".a-text-right > .a-size-base")).text.strip()
 
 
 # sets of choices that one can choose from
 def get_choice_sets(page):
-    return page.select(
-        "#twister-plus-inline-twister > div.inline-twister-row"
-    )
+    return page.select("#twister-plus-inline-twister > div.inline-twister-row")
 
 
 # if buy box hasn't fully loaded because its waiting for users to make a choice
@@ -63,26 +54,28 @@ def has_partial_buyboxes(page):
 
 
 def get_histogram_rows(page):
-    return page.select(
-        ".cr-widget-TitleRatingsHistogram .a-histogram-row"
-    )
+    return page.select(".cr-widget-TitleRatingsHistogram .a-histogram-row")
+
 
 def get_product_name(page):
-    title_elements = page.select("span#productTitle, span.qa-title-text, h1[data-automation-id='title']")
+    title_elements = page.select(
+        "span#productTitle, span.qa-title-text, h1[data-automation-id='title']"
+    )
     if len(title_elements) > 0:
         return only(title_elements).text.strip()
-    
+
     return only(page.select("h1[data-testid='title-art'] img"))["alt"]
 
+
 # filename = "380"
-def scrape_products(product_pages_folder):
+def parse_product_pages(product_pages_folder):
     product_rows = []
     for filename in get_filenames(product_pages_folder):
         # all digits
-        if not(re.match(r"^\d+$", filename) is None):
+        if not (re.match(r"^\d+$", filename) is None):
             product_data = {}
-            file = open(path.join(product_pages_folder, filename + ".html"), 'r')
-            page = BeautifulSoup(file, 'lxml')
+            file = open(path.join(product_pages_folder, filename + ".html"), "r")
+            page = BeautifulSoup(file, "lxml")
             try:
                 product_data["product_name"] = get_product_name(page)
                 average_ratings = page.select(
@@ -91,14 +84,18 @@ def scrape_products(product_pages_folder):
                 if len(average_ratings) > 0:
                     # TODO: sanity check verify no ratings
                     product_data["average_rating"] = float(
-                        re.search(r"^(.*) out of 5$", only(average_ratings).text.strip()).group(1)
+                        re.search(
+                            r"^(.*) out of 5$", only(average_ratings).text.strip()
+                        ).group(1)
                     )
                     product_data["number_of_ratings"] = int(
                         remove_commas(
                             re.search(
                                 r"^(.*) global ratings?$",
                                 only(
-                                    page.select(".cr-widget-TitleRatingsHistogram div[data-hook=\"total-review-count\"], .cr-widget-TitleRatingsHistogram span[data-hook=\"total-review-count\"]")
+                                    page.select(
+                                        '.cr-widget-TitleRatingsHistogram div[data-hook="total-review-count"], .cr-widget-TitleRatingsHistogram span[data-hook="total-review-count"]'
+                                    )
                                 ).text.strip(),
                             ).group(1)
                         )
@@ -137,7 +134,6 @@ def scrape_products(product_pages_folder):
             #         get_choice_sets(page)[choice_set_index].select(
             #             "ul > li.a-declarative"
             #         )[0].click()
-
 
             # amazon_choice_badges = page.select(".ac-badge-rectangle")
             # if len(amazon_choice_badges) > 0:
@@ -401,6 +397,5 @@ def scrape_products(product_pages_folder):
 
             file.close()
             product_rows.append(product_data)
-    
-    return dicts_to_dataframe(product_rows)
 
+    return dicts_to_dataframe(product_rows)
