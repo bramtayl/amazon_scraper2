@@ -64,15 +64,16 @@ def parse_search_page(search_pages_folder, query):
             )
         )
     )
-    # add some ids for convenience
-    # TODO: there might be some repeated products across different searches
-    search_results_data["product_id"] = range(search_results_data.shape[0])
     file.close()
     return search_results_data
 
 
 def parse_search_pages(search_pages_folder):
-    return concat(
+    all_data = concat(
         parse_search_page(search_pages_folder, query)
         for query in get_filenames(search_pages_folder)
     )
+    # add some ids for convenience
+    # TODO: there might be some repeated products across different searches
+    all_data["product_id"] = range(all_data.shape[0])
+    return all_data

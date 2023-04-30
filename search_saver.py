@@ -9,7 +9,6 @@ from selenium.webdriver.support.expected_conditions import (
 )
 from selenium.webdriver.support.ui import Select
 from selenium.webdriver.support.wait import WebDriverWait as wait
-datetime
 
 FOLDER = "/home/brandon/amazon_scraper"
 chdir(FOLDER)
