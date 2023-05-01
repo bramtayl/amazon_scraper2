@@ -15,6 +15,8 @@ from selenium.webdriver.support.wait import WebDriverWait as wait
 # time for timed waits
 WAIT_TIME = 20
 
+FAKESPOT_FILE = "/home/brandon/snap/firefox/common/.mozilla/firefox/0tsz0chl.default/extensions/{44df5123-f715-9146-bfaa-c6e8d4461d44}.xpi"
+
 
 # custom error if amazon stops us with captcha
 class FoiledAgainError(Exception):
@@ -38,7 +40,7 @@ def only(list):
     return list[0]
 
 
-def new_browser(user_agent):
+def new_browser(user_agent, fakespot = False):
     options = Options()
     # add headless to avoid the visual display and speed things up
     # options.add_argument("-headless")
@@ -51,6 +53,16 @@ def new_browser(user_agent):
     browser.set_script_timeout(WAIT_TIME)
     # throw an error if we wait too long
     browser.set_page_load_timeout(WAIT_TIME)
+    if fakespot:
+        browser.execute("INSTALL_ADDON", {"path": FAKESPOT_FILE, "temporary": True})
+        # wait for fakespot to open a new tab
+        wait(browser, WAIT_TIME).until(lambda browser: len(browser.window_handles) > 1)
+        # close it
+        browser.switch_to.window(browser.window_handles[1])
+        browser.close()
+        # return to main tab
+        browser.switch_to.window(browser.window_handles[0])
+        
 
     return browser
 

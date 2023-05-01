@@ -25,11 +25,11 @@ def find_department_option_index(browser, department):
     raise Exception("Department " + department + " not found!")
 
 # query = "fire hd 10 tablet"
-# browser = new_browser(user_agents[0])
+# browser = new_browser(user_agents[0], fakespot = True)
 # go_to_amazon(browser)
 # department = "Books"
 def save_search_page(
-    browser,
+    browser, 
     search_id,
     department,
     query,

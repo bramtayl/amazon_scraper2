@@ -56,6 +56,7 @@ def save_product_page(
     )
 
     wait_for_amazon(browser)
+    wait(browser, 2).until(located((By.CSS_SELECTOR, "div.fakespot-main-grade-box-wrapper")))
 
     # if buy box hasn't fully loaded because its waiting for users to make a choice
     if has_partial_buyboxes(browser):
@@ -105,7 +106,6 @@ def save_product_page(
             path.join(product_pages_folder, str(product_id) + "-sellers.html"),
         )
 
-
 # query = "chemistry textbook"
 # browser = new_browser("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.69 Safari/537.36")
 # url = search_results.loc[:, "url"][1000]
@@ -117,7 +117,7 @@ def save_product_pages(
     user_agents,
     user_agent_index=0,
 ):
-    browser = new_browser(user_agents[user_agent_index])
+    browser = new_browser(user_agents[user_agent_index], fakespot = True)
     browser_box.append(browser)
 
     completed_product_ids = get_filenames(product_pages_folder)
@@ -155,7 +155,7 @@ def save_product_pages(
             # start again if we're at the end
             if user_agent_index == len(user_agents):
                 user_agent_index = 0
-            browser = new_browser(user_agents[user_agent_index])
+            browser = new_browser(user_agents[user_agent_index], fakespot = True)
             browser_box.append(browser)
             try:
                 save_product_page(
