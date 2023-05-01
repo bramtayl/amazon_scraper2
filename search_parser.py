@@ -77,8 +77,9 @@ def parse_search_pages(search_pages_folder):
     )
 
 # replace spaces with underscores, and remove blacklisted characters
+# only use the first 200 characters to avoid filenames that are too long
 def get_valid_filename(name):
-    return re.sub(r"(?u)[^-\w.]", "", str(name).strip().replace(" ", "_"))
+    return re.sub(r"(?u)[^-\w.]", "", str(name).strip().replace(" ", "_"))[0:150]
 
 # get unique urls and create an id
 def get_product_url_data(search_results_data):
