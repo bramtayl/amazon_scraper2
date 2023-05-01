@@ -8,6 +8,7 @@ FOLDER = "/home/brandon/amazon_scraper"
 chdir(FOLDER)
 from utilities import dicts_to_dataframe, get_filenames, only
 
+
 def parse_search_result(search_id, search_result, index):
     search_result_row = {"search_term": search_id, "rank": index + 1}
 
@@ -75,10 +76,14 @@ def parse_search_pages(search_pages_folder):
         for search_id in get_filenames(search_pages_folder)
     )
 
+# replace spaces with underscores, and remove blacklisted characters
 def get_valid_filename(name):
     return re.sub(r"(?u)[^-\w.]", "", str(name).strip().replace(" ", "_"))
 
+# get unique urls and create an id
 def get_product_url_data(search_results_data):
     product_url_data = DataFrame({"url": list(set(search_results_data.loc[:, "url"]))})
-    product_url_data["product_id"] = [get_valid_filename(url) for url in list(set(search_results_data.loc[:, "url"]))]
+    product_url_data["product_id"] = [
+        get_valid_filename(url) for url in list(set(search_results_data.loc[:, "url"]))
+    ]
     return product_url_data

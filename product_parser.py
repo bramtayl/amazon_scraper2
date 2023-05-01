@@ -6,6 +6,7 @@ FOLDER = "/home/brandon/amazon_scraper"
 chdir(FOLDER)
 from utilities import dicts_to_dataframe, get_filenames, only
 
+
 # e.g. 1,000 -> 1000
 def remove_commas(a_string):
     return a_string.replace(",", "")

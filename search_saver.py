@@ -15,21 +15,25 @@ from utilities import (
     only,
     save_page,
     wait_for_amazon,
-    WentWrongError
+    WentWrongError,
 )
 
+
 def find_department_option_index(browser, department):
-    for index, option in enumerate(browser.find_elements(By.CSS_SELECTOR, "#searchDropdownBox option")):
+    for index, option in enumerate(
+        browser.find_elements(By.CSS_SELECTOR, "#searchDropdownBox option")
+    ):
         if option.text == department:
             return index
     raise Exception("Department " + department + " not found!")
+
 
 # query = "fire hd 10 tablet"
 # browser = new_browser(user_agents[0], fakespot = True)
 # go_to_amazon(browser)
 # department = "Books"
 def save_search_page(
-    browser, 
+    browser,
     search_id,
     department,
     query,
@@ -39,11 +43,15 @@ def save_search_page(
     department_menu = only(browser.find_elements(By.CSS_SELECTOR, "#searchDropdownBox"))
     department_selector = Select(department_menu)
     department_index = find_department_option_index(browser, department)
-    while department_index < find_department_option_index(browser, department_selector.first_selected_option.text):
+    while department_index < find_department_option_index(
+        browser, department_selector.first_selected_option.text
+    ):
         department_menu.send_keys(Keys.UP)
-    while department_index > find_department_option_index(browser, department_selector.first_selected_option.text):
+    while department_index > find_department_option_index(
+        browser, department_selector.first_selected_option.text
+    ):
         department_menu.send_keys(Keys.DOWN)
-    
+
     search_bar = only(browser.find_elements(By.CSS_SELECTOR, "#twotabsearchtextbox"))
 
     search_bar.clear()
@@ -66,6 +74,7 @@ def save_search_page(
         path.join(search_pages_folder, search_id + ".html"),
     )
 
+
 def go_to_amazon(browser):
     url = "https://www.amazon.com/"
     try:
@@ -76,6 +85,7 @@ def go_to_amazon(browser):
         # sometimes Amazon loads an abbreviated homepage without the full search bar
         browser.get(url)
         wait_for_amazon(browser)
+
 
 def save_search_pages(
     browser_box,
@@ -98,7 +108,6 @@ def save_search_pages(
     for department, query in zip(
         query_data.loc[:, "department"], query_data.loc[:, "query"]
     ):
-        
         search_id = department + "-" + query
 
         # don't rerun a query we already ran
@@ -112,7 +121,7 @@ def save_search_pages(
                 department,
                 query,
                 search_logs_folder,
-                search_pages_folder
+                search_pages_folder,
             )
         except FoiledAgainError:
             # if Amazon sends a captcha, change the user agent and try again
@@ -131,7 +140,7 @@ def save_search_pages(
                     department,
                     query,
                     search_logs_folder,
-                    search_pages_folder
+                    search_pages_folder,
                 )
             except TimeoutException:
                 print(search_id)
@@ -139,6 +148,7 @@ def save_search_pages(
             except WentWrongError:
                 print(search_id)
                 print("Went wrong, skipping")
+                # we need to go back to amazon so we can keep searching
                 go_to_amazon(browser)
         except TimeoutException:
             print(search_id)
@@ -146,6 +156,7 @@ def save_search_pages(
         except WentWrongError:
             print(search_id)
             print("Went wrong, skipping")
+            # we need to go back to amazon so we can keep searching
             go_to_amazon(browser)
 
     return user_agent_index

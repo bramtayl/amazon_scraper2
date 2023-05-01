@@ -6,7 +6,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import MoveTargetOutOfBoundsException, TimeoutException
 from selenium.webdriver.support.expected_conditions import (
-    presence_of_element_located as located
+    presence_of_element_located as located,
 )
 from selenium.webdriver.support.wait import WebDriverWait as wait
 
@@ -14,6 +14,7 @@ FOLDER = "/home/brandon/amazon_scraper"
 chdir(FOLDER)
 from utilities import (
     FoiledAgainError,
+    GoneError,
     get_filenames,
     new_browser,
     only,
@@ -22,10 +23,6 @@ from utilities import (
     WAIT_TIME,
 )
 
-
-# custom error if the page no longer exists
-class GoneError(Exception):
-    pass
 
 # sets of choices that one can choose from
 def get_choice_sets(browser):
@@ -44,6 +41,7 @@ def has_partial_buyboxes(browser):
 # it might be nice for relevance to have but isn't showing up in the HTML anyway...
 JUNK_CSS = "map, meta, noscript, script, style, svg, video, #ad-endcap-1_feature_div, #ad-display-center-1_feature_div, #amsDetailRight_feature_div, #aplusBrandStory_feature_div, #beautyRecommendations_feature_div, #discovery-and-inspiration_feature_div, #dp-ads-center-promo_feature_div, #dp-ads-center-promo-top_feature_div, #dp-ads-middle_feature_div, #gridgetWrapper, #HLCXComparisonWidget_feature_div, #imageBlock_feature_div, #navbar-main, #navFooter, #navtop, #nav-upnav, #percolate-ui-ilm_div, #postsSameBrandCard_feature_div, #product-ads-feedback_feature_div, #similarities_feature_div, #skiplink, #storeDisclaimer_feature_div, #va-related-videos-widget_feature_div, #valuePick_feature_div, #sims-themis-sponsored-products-2_feature_div, #sponsoredProducts2_feature_div, .reviews-display-ad"
 
+
 # url = product_url_data.loc[:, "url"][0]
 def save_product_page(
     browser,
@@ -59,10 +57,14 @@ def save_product_page(
 
     wait_for_amazon(browser)
     try:
-        wait(browser, WAIT_TIME).until(located((By.CSS_SELECTOR, "div.fakespot-main-grade-box-wrapper")))
+        # wait for fakespot grade
+        wait(browser, WAIT_TIME).until(
+            located((By.CSS_SELECTOR, "div.fakespot-main-grade-box-wrapper"))
+        )
     except TimeoutException:
+        # might not be a fakespot grade
         pass
-    
+
     # if buy box hasn't fully loaded because its waiting for users to make a choice
     if has_partial_buyboxes(browser):
         # select the first option for all the choice sets
@@ -87,14 +89,20 @@ def save_product_page(
     else:
         box_prefix = ""
 
-    # scroll the Q&A into view
-    answers = browser.find_elements(By.CSS_SELECTOR, "div[data-cel-widget='ask-btf_feature_div']")
+    # Q&A only loads when it's view
+    answers = browser.find_elements(
+        By.CSS_SELECTOR, "div[data-cel-widget='ask-btf_feature_div']"
+    )
     if len(answers) > 0:
+        # scroll the Q&A into view
         browser.execute_script("arguments[0].scrollIntoView();", only(answers))
-        wait(browser, WAIT_TIME).until(located((By.CSS_SELECTOR, "div.askInlineWidget")))
+        # wait for the Q&A
+        wait(browser, WAIT_TIME).until(
+            located((By.CSS_SELECTOR, "div.askInlineWidget"))
+        )
 
     save_page(
-        browser, JUNK_CSS, path.join(product_pages_folder, str(product_id) + ".html")
+        browser, JUNK_CSS, path.join(product_pages_folder, product_id + ".html")
     )
 
     # if we have to pick a seller, save a second page with the seller list
@@ -117,6 +125,7 @@ def save_product_page(
             path.join(product_pages_folder, str(product_id) + "-sellers.html"),
         )
 
+
 def save_product_pages(
     browser_box,
     product_url_data,
@@ -125,7 +134,7 @@ def save_product_pages(
     user_agents,
     user_agent_index=0,
 ):
-    browser = new_browser(user_agents[user_agent_index], fakespot = True)
+    browser = new_browser(user_agents[user_agent_index], fakespot=True)
     browser_box.append(browser)
 
     completed_product_ids = get_filenames(product_pages_folder)
@@ -164,7 +173,7 @@ def save_product_pages(
             # start again if we're at the end
             if user_agent_index == len(user_agents):
                 user_agent_index = 0
-            browser = new_browser(user_agents[user_agent_index], fakespot = True)
+            browser = new_browser(user_agents[user_agent_index], fakespot=True)
             browser_box.append(browser)
             try:
                 save_product_page(

@@ -8,7 +8,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.support.expected_conditions import (
     presence_of_element_located as located,
-    invisibility_of_element_located as not_located
+    invisibility_of_element_located as not_located,
 )
 from selenium.webdriver.support.wait import WebDriverWait as wait
 
@@ -22,25 +22,29 @@ FAKESPOT_FILE = "/home/brandon/snap/firefox/common/.mozilla/firefox/0tsz0chl.def
 class FoiledAgainError(Exception):
     pass
 
+
 # custom error if the page no longer exists
 class GoneError(Exception):
     pass
 
+# custom error if amazon tells us something "went wrong"
 class WentWrongError(Exception):
     pass
 
-class NotOnlyOneError(Exception):
+# custom error if there is not exactly one in a list
+class NotExactlyOneError(Exception):
     pass
+
 
 # throw an error if there isn't one and only one result
 # important safety measure for CSS selectors
 def only(list):
     if len(list) != 1:
-        raise NotOnlyOneError()
+        raise NotExactlyOneError()
     return list[0]
 
 
-def new_browser(user_agent, fakespot = False):
+def new_browser(user_agent, fakespot=False):
     options = Options()
     # add headless to avoid the visual display and speed things up
     # options.add_argument("-headless")
@@ -62,7 +66,6 @@ def new_browser(user_agent, fakespot = False):
         browser.close()
         # return to main tab
         browser.switch_to.window(browser.window_handles[0])
-        
 
     return browser
 
@@ -96,6 +99,7 @@ def combine_folder_csvs(folder):
 def get_filenames(folder):
     return set(path.splitext(filename)[0] for filename in listdir(folder))
 
+
 # amazon has a bunch of empty divs reserved for specific cases
 # and empty divs of empty divs
 # sometimes the only text is whitespace that html removes anyway
@@ -122,6 +126,7 @@ def save_page(browser, junk_css, filename):
     with open(filename, "w") as file:
         file.write(str(page))
 
+
 def wait_for_amazon(browser):
     try:
         # wait a couple of seconds for a new page to start not_located
@@ -129,7 +134,7 @@ def wait_for_amazon(browser):
     except TimeoutException:
         # if we time out, its already loaded
         pass
-    
+
     try:
         wait(browser, WAIT_TIME).until(located((By.CSS_SELECTOR, "#navFooter")))
     except TimeoutException as an_error:
@@ -149,16 +154,13 @@ def wait_for_amazon(browser):
             only(gones)
             # throw a custom error
             raise GoneError()
-        
+
         went_wrongs = browser.find_elements(
             By.CSS_SELECTOR,
-            "img[alt=\"Sorry! Something went wrong on our end. Please go back and try again or go to Amazon's home page.\"]"
+            'img[alt="Sorry! Something went wrong on our end. Please go back and try again or go to Amazon\'s home page."]',
         )
         if len(went_wrongs) > 0:
             only(went_wrongs)
             raise WentWrongError()
 
         raise an_error
-        
-
-        
