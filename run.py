@@ -1,5 +1,5 @@
 from os import chdir, path
-from pandas import read_csv
+from pandas import DataFrame, read_csv
 
 FOLDER = "/home/brandon/amazon_scraper"
 chdir(FOLDER)
@@ -7,7 +7,6 @@ chdir(FOLDER)
 from search_saver import save_search_pages
 from search_parser import parse_search_pages
 from product_saver import save_product_pages
-from product_parser import parse_product_pages
 
 browser_box = []
 
@@ -15,12 +14,11 @@ query_data = read_csv(path.join(FOLDER, "data", "queries.csv"))
 user_agents = read_csv(path.join(FOLDER, "user_agents.csv")).loc[:, "user_agent"]
 search_logs_folder = path.join(FOLDER, "data", "search_logs")
 search_pages_folder = path.join(FOLDER, "data", "search_pages")
-search_results_folder = path.join(FOLDER, "data", "search_results")
 product_logs_folder = path.join(FOLDER, "data", "product_logs")
 product_pages_folder = path.join(FOLDER, "data", "product_pages")
-product_results_folder = path.join(FOLDER, "data", "product_results")
 
 user_agent_index = 0
+
 user_agent_index = save_search_pages(
     browser_box,
     query_data,
@@ -32,9 +30,12 @@ user_agent_index = save_search_pages(
 
 search_results_data = parse_search_pages(search_pages_folder)
 
+simple_product_data = DataFrame({"url": list(set(search_results_data.loc[:, "url"]))})
+simple_product_data["product_id"] = range(simple_product_data.shape[0])
+
 user_agent_index = save_product_pages(
     browser_box,
-    search_results_data,
+    simple_product_data,
     product_logs_folder,
     product_pages_folder,
     user_agents,

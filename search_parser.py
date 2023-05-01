@@ -6,9 +6,8 @@ FOLDER = "/home/brandon/amazon_scraper"
 chdir(FOLDER)
 from utilities import dicts_to_dataframe, get_filenames, only
 
-
-def parse_search_result(query, search_result, index):
-    search_result_row = {"search_term": query, "rank": index + 1}
+def parse_search_result(search_id, search_result, index):
+    search_result_row = {"search_term": search_id, "rank": index + 1}
 
     search_result_row["url"] = only(
         search_result.select(
@@ -51,13 +50,13 @@ def parse_search_result(query, search_result, index):
     return search_result_row
 
 
-# query = "dog food"
-def parse_search_page(search_pages_folder, query):
-    file = open(path.join(search_pages_folder, query + ".html"), "r")
+# search_id = "All Departments-dog food"
+def parse_search_page(search_pages_folder, search_id):
+    file = open(path.join(search_pages_folder, search_id + ".html"), "r")
     # index = 0
     # search_result = BeautifulSoup(file, 'lxml').select("div.s-main-slot.s-search_results_data-list > div[data-component-type='s-search-search_results_data']")[index]
     search_results_data = dicts_to_dataframe(
-        parse_search_result(query, search_result, index)
+        parse_search_result(search_id, search_result, index)
         for index, search_result in enumerate(
             BeautifulSoup(file, "lxml").select(
                 "div.s-main-slot.s-result-list > div[data-component-type='s-search-result']",
@@ -69,11 +68,7 @@ def parse_search_page(search_pages_folder, query):
 
 
 def parse_search_pages(search_pages_folder):
-    all_data = concat(
-        parse_search_page(search_pages_folder, query)
-        for query in get_filenames(search_pages_folder)
+    return concat(
+        parse_search_page(search_pages_folder, search_id)
+        for search_id in get_filenames(search_pages_folder)
     )
-    # add some ids for convenience
-    # TODO: there might be some repeated products across different searches
-    all_data["product_id"] = range(all_data.shape[0])
-    return all_data

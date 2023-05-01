@@ -2,9 +2,15 @@ from bs4 import BeautifulSoup, Comment
 from os import listdir, path
 import re
 from pandas import concat, DataFrame, read_csv
+from selenium import webdriver
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.options import Options
-from selenium import webdriver
+from selenium.webdriver.support.expected_conditions import (
+    presence_of_element_located as located,
+    invisibility_of_element_located as not_located
+)
+from selenium.webdriver.support.wait import WebDriverWait as wait
 
 # time for timed waits
 WAIT_TIME = 20
@@ -14,13 +20,21 @@ WAIT_TIME = 20
 class FoiledAgainError(Exception):
     pass
 
+# custom error if the page no longer exists
+class GoneError(Exception):
+    pass
+
+class WentWrongError(Exception):
+    pass
+
+class NotOnlyOneError(Exception):
+    pass
 
 # throw an error if there isn't one and only one result
 # important safety measure for CSS selectors
 def only(list):
-    count = len(list)
-    if count != 1:
-        raise IndexError(count)
+    if len(list) != 1:
+        raise NotOnlyOneError()
     return list[0]
 
 
@@ -70,17 +84,6 @@ def combine_folder_csvs(folder):
 def get_filenames(folder):
     return set(path.splitext(filename)[0] for filename in listdir(folder))
 
-
-# custom error if the page no longer exists
-def check_captcha(browser):
-    foiled_agains = browser.find_elements(
-        By.CSS_SELECTOR, "form[action='/errors/validateCaptcha']"
-    )
-    if len(foiled_agains) > 0:
-        only(foiled_agains)
-        raise FoiledAgainError()
-
-
 # amazon has a bunch of empty divs reserved for specific cases
 # and empty divs of empty divs
 # sometimes the only text is whitespace that html removes anyway
@@ -106,3 +109,44 @@ def save_page(browser, junk_css, filename):
 
     with open(filename, "w") as file:
         file.write(str(page))
+
+def wait_for_amazon(browser):
+    try:
+        # wait a couple of seconds for a new page to start not_located
+        wait(browser, 2).until(not_located((By.CSS_SELECTOR, "#navFooter")))
+    except TimeoutException:
+        # if we time out, its already loaded
+        pass
+    
+    try:
+        wait(browser, WAIT_TIME).until(located((By.CSS_SELECTOR, "#navFooter")))
+    except TimeoutException as an_error:
+        foiled_agains = browser.find_elements(
+            By.CSS_SELECTOR, "form[action='/errors/validateCaptcha']"
+        )
+        if len(foiled_agains) > 0:
+            only(foiled_agains)
+            raise FoiledAgainError()
+
+        gones = browser.find_elements(
+            By.CSS_SELECTOR,
+            "img[alt=\"Sorry! We couldn't find that page. Try searching or go to Amazon's home page.\"]",
+        )
+        if len(gones) > 0:
+            # sanity check
+            only(gones)
+            # throw a custom error
+            raise GoneError()
+        
+        went_wrongs = browser.find_elements(
+            By.CSS_SELECTOR,
+            "img[alt=\"Sorry! Something went wrong on our end. Please go back and try again or go to Amazon's home page.\"]"
+        )
+        if len(went_wrongs) > 0:
+            only(went_wrongs)
+            raise WentWrongError()
+
+        raise an_error
+        
+
+        
