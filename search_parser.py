@@ -1,6 +1,8 @@
+from base64 import urlsafe_b64encode
 from bs4 import BeautifulSoup
 from os import chdir, path
-from pandas import concat
+from pandas import concat, DataFrame
+import re
 
 FOLDER = "/home/brandon/amazon_scraper"
 chdir(FOLDER)
@@ -72,3 +74,11 @@ def parse_search_pages(search_pages_folder):
         parse_search_page(search_pages_folder, search_id)
         for search_id in get_filenames(search_pages_folder)
     )
+
+def get_valid_filename(name):
+    return re.sub(r"(?u)[^-\w.]", "", str(name).strip().replace(" ", "_"))
+
+def get_product_url_data(search_results_data):
+    product_url_data = DataFrame({"url": list(set(search_results_data.loc[:, "url"]))})
+    product_url_data["product_id"] = [get_valid_filename(url) for url in list(set(search_results_data.loc[:, "url"]))]
+    return product_url_data

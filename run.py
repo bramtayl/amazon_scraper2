@@ -1,11 +1,11 @@
 from os import chdir, path
-from pandas import DataFrame, read_csv
+from pandas import read_csv
 
 FOLDER = "/home/brandon/amazon_scraper"
 chdir(FOLDER)
 
 from search_saver import save_search_pages
-from search_parser import parse_search_pages
+from search_parser import get_product_url_data, parse_search_pages
 from product_saver import save_product_pages
 
 browser_box = []
@@ -17,7 +17,7 @@ search_pages_folder = path.join(FOLDER, "data", "search_pages")
 product_logs_folder = path.join(FOLDER, "data", "product_logs")
 product_pages_folder = path.join(FOLDER, "data", "product_pages")
 
-user_agent_index = 0
+user_agent_index = 4
 
 user_agent_index = save_search_pages(
     browser_box,
@@ -29,13 +29,11 @@ user_agent_index = save_search_pages(
 )
 
 search_results_data = parse_search_pages(search_pages_folder)
-
-simple_product_data = DataFrame({"url": list(set(search_results_data.loc[:, "url"]))})
-simple_product_data["product_id"] = range(simple_product_data.shape[0])
+product_url_data = get_product_url_data(search_results_data)
 
 user_agent_index = save_product_pages(
     browser_box,
-    simple_product_data,
+    product_url_data,
     product_logs_folder,
     product_pages_folder,
     user_agents,

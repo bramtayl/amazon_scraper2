@@ -1,8 +1,10 @@
 from datetime import datetime
 from os import chdir, path
 from pandas import DataFrame
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import TimeoutException
+from selenium.webdriver.common.keys import Keys
+from selenium.common.exceptions import MoveTargetOutOfBoundsException, TimeoutException
 from selenium.webdriver.support.expected_conditions import (
     presence_of_element_located as located
 )
@@ -40,9 +42,9 @@ def has_partial_buyboxes(browser):
 # TODO:
 # ask-btf_feature_div is the Q&A section
 # it might be nice for relevance to have but isn't showing up in the HTML anyway...
-JUNK_CSS = "map, meta, noscript, script, style, svg, video, #ad-endcap-1_feature_div, #ad-display-center-1_feature_div, #amsDetailRight_feature_div, #aplusBrandStory_feature_div, #ask-btf_feature_div, #beautyRecommendations_feature_div, #discovery-and-inspiration_feature_div, #dp-ads-center-promo_feature_div, #dp-ads-center-promo-top_feature_div, #dp-ads-middle_feature_div, #gridgetWrapper, #HLCXComparisonWidget_feature_div, #imageBlock_feature_div, #navbar-main, #navFooter, #navtop, #nav-upnav, #percolate-ui-ilm_div, #postsSameBrandCard_feature_div, #product-ads-feedback_feature_div, #similarities_feature_div, #skiplink, #storeDisclaimer_feature_div, #va-related-videos-widget_feature_div, #valuePick_feature_div, #sims-themis-sponsored-products-2_feature_div, #sponsoredProducts2_feature_div, .reviews-display-ad"
+JUNK_CSS = "map, meta, noscript, script, style, svg, video, #ad-endcap-1_feature_div, #ad-display-center-1_feature_div, #amsDetailRight_feature_div, #aplusBrandStory_feature_div, #beautyRecommendations_feature_div, #discovery-and-inspiration_feature_div, #dp-ads-center-promo_feature_div, #dp-ads-center-promo-top_feature_div, #dp-ads-middle_feature_div, #gridgetWrapper, #HLCXComparisonWidget_feature_div, #imageBlock_feature_div, #navbar-main, #navFooter, #navtop, #nav-upnav, #percolate-ui-ilm_div, #postsSameBrandCard_feature_div, #product-ads-feedback_feature_div, #similarities_feature_div, #skiplink, #storeDisclaimer_feature_div, #va-related-videos-widget_feature_div, #valuePick_feature_div, #sims-themis-sponsored-products-2_feature_div, #sponsoredProducts2_feature_div, .reviews-display-ad"
 
-
+# url = product_url_data.loc[:, "url"][0]
 def save_product_page(
     browser,
     product_id,
@@ -52,12 +54,15 @@ def save_product_page(
 ):
     browser.get("https://www.amazon.com" + url)
     DataFrame({"product_id": [product_id], "datetime": [datetime.now()]}).to_csv(
-        path.join(product_logs_folder, str(product_id) + ".csv"), index=False
+        path.join(product_logs_folder, product_id + ".csv"), index=False
     )
 
     wait_for_amazon(browser)
-    wait(browser, 2).until(located((By.CSS_SELECTOR, "div.fakespot-main-grade-box-wrapper")))
-
+    try:
+        wait(browser, WAIT_TIME).until(located((By.CSS_SELECTOR, "div.fakespot-main-grade-box-wrapper")))
+    except TimeoutException:
+        pass
+    
     # if buy box hasn't fully loaded because its waiting for users to make a choice
     if has_partial_buyboxes(browser):
         # select the first option for all the choice sets
@@ -81,6 +86,12 @@ def save_product_page(
         box_prefix = "#buyBoxAccordion > div:first-child "
     else:
         box_prefix = ""
+
+    # scroll the Q&A into view
+    answers = browser.find_elements(By.CSS_SELECTOR, "div[data-cel-widget='ask-btf_feature_div']")
+    if len(answers) > 0:
+        browser.execute_script("arguments[0].scrollIntoView();", only(answers))
+        wait(browser, WAIT_TIME).until(located((By.CSS_SELECTOR, "div.askInlineWidget")))
 
     save_page(
         browser, JUNK_CSS, path.join(product_pages_folder, str(product_id) + ".html")
@@ -106,12 +117,9 @@ def save_product_page(
             path.join(product_pages_folder, str(product_id) + "-sellers.html"),
         )
 
-# query = "chemistry textbook"
-# browser = new_browser("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.69 Safari/537.36")
-# url = search_results.loc[:, "url"][1000]
 def save_product_pages(
     browser_box,
-    simple_product_data,
+    product_url_data,
     product_logs_folder,
     product_pages_folder,
     user_agents,
@@ -123,8 +131,9 @@ def save_product_pages(
     completed_product_ids = get_filenames(product_pages_folder)
 
     # no previous product, so starts empty
+    # url = product_url_data.loc[:, "url"][0]
     for product_id, url in zip(
-        simple_product_data.loc[:, "product_id"], simple_product_data.loc[:, "url"]
+        product_url_data.loc[:, "product_id"], product_url_data.loc[:, "url"]
     ):
         # don't save a product we already have
         if str(product_id) in completed_product_ids:
