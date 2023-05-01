@@ -50,7 +50,11 @@ def save_product_page(
     product_logs_folder,
     product_pages_folder,
 ):
-    browser.get("https://www.amazon.com" + url)
+    if url.startswith("http"):
+        browser.get(url)
+    else:
+        browser.get("https://www.amazon.com" + url)
+    
     DataFrame({"product_id": [product_id], "datetime": [datetime.now()]}).to_csv(
         path.join(product_logs_folder, product_id + ".csv"), index=False
     )
@@ -122,7 +126,7 @@ def save_product_page(
         save_page(
             browser,
             JUNK_CSS,
-            path.join(product_pages_folder, str(product_id) + "-sellers.html"),
+            path.join(product_pages_folder, product_id + "-sellers.html"),
         )
 
 
@@ -145,7 +149,7 @@ def save_product_pages(
         product_url_data.loc[:, "product_id"], product_url_data.loc[:, "url"]
     ):
         # don't save a product we already have
-        if str(product_id) in completed_product_ids:
+        if product_id in completed_product_ids:
             continue
 
         try:

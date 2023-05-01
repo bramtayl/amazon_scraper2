@@ -17,7 +17,7 @@ search_pages_folder = path.join(FOLDER, "data", "search_pages")
 product_logs_folder = path.join(FOLDER, "data", "product_logs")
 product_pages_folder = path.join(FOLDER, "data", "product_pages")
 
-user_agent_index = 4
+user_agent_index = 0
 
 user_agent_index = save_search_pages(
     browser_box,
