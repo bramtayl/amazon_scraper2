@@ -1,40 +1,34 @@
-from os import chdir, path
+from os import path
 from pandas import read_csv
 
-FOLDER = "/home/brandon/amazon_scraper"
-chdir(FOLDER)
+from src.search_saver import save_search_pages
+from src.search_parser import parse_search_pages
+from src.product_saver import save_product_pages
+from src.product_parser import parse_product_pages
 
-from search_saver import save_search_pages
-from search_parser import get_product_url_data, parse_search_pages
-from product_saver import save_product_pages
+search_pages_folder = path.join("data", "search_pages")
+product_pages_folder = path.join("data", "product_pages")
+search_results_file = path.join("data", "search_results.csv")
 
 browser_box = []
-
-query_data = read_csv(path.join(FOLDER, "data", "queries.csv"))
-user_agents = read_csv(path.join(FOLDER, "user_agents.csv")).loc[:, "user_agent"]
-search_logs_folder = path.join(FOLDER, "data", "search_logs")
-search_pages_folder = path.join(FOLDER, "data", "search_pages")
-product_logs_folder = path.join(FOLDER, "data", "product_logs")
-product_pages_folder = path.join(FOLDER, "data", "product_pages")
-
+user_agents = read_csv(path.join("data", "user_agents.csv")).loc[:, "user_agent"]
 user_agent_index = 0
 
 user_agent_index = save_search_pages(
     browser_box,
-    query_data,
-    search_logs_folder,
+    read_csv(path.join("data", "queries.csv")),
+    path.join("data", "search_logs"),
     search_pages_folder,
     user_agents,
     user_agent_index=user_agent_index,
 )
 
-search_results_data = parse_search_pages(search_pages_folder)
-product_url_data = get_product_url_data(search_results_data)
+parse_search_pages(search_pages_folder).to_csv(search_results_file, index = False)
 
 user_agent_index = save_product_pages(
     browser_box,
-    product_url_data,
-    product_logs_folder,
+    set(read_csv(search_results_file).loc[:, "product_url"]),
+    path.join("data", "product_logs"),
     product_pages_folder,
     user_agents,
     user_agent_index=user_agent_index,
@@ -43,7 +37,7 @@ user_agent_index = save_product_pages(
 for browser in browser_box:
     browser.close()
 
-# parse_product_pages(product_pages_folder).to_csv(path.join(FOLDER, "result.csv"))
+parse_product_pages(product_pages_folder).to_csv(path.join("data", "product_results.csv"), index = False)
 
 # TODO:
 # number of option boxes
@@ -57,6 +51,8 @@ for browser in browser_box:
 # whether subscription available (done two formats maybe more out there)
 # whether eligable for refund (doneish)
 # whether bundles available (ignore maybe)
+
+# UTF encoding
 
 # page no longer exists: https://www.amazon.com/gp/slredirect/picassoRedirect.html/ref=pa_sp_mtf_aps_sr_pg1_1?ie=UTF8&adId=A04276923NGE1Z8ZND0Z1&qualifier=1681822641&id=4761451586758343&widgetName=sp_mtf&url=%2FBondelid-Soccer-Jerseys-T-Shirt-Outdoor%2Fdp%2FB0BVB2DZVM%2Fref%3Dsr_1_38_sspa%3Fkeywords%3Dfc%2Bbarcelona%2Bjersey%26qid%3D1681822641%26sr%3D8-38-spons%26psc%3D1
 # movie_title: https://www.amazon.com/Avatar-Way-Water-Sam-Worthington/dp/B0B72TVT92/ref=sr_1_14?keywords=dvd+movies&qid=1681822652&sr=8-14

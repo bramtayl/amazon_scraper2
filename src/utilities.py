@@ -78,15 +78,6 @@ def sorted_dataframe(dictionary):
     sorted_dict = {key: dictionary[key] for key in the_keys}
     return DataFrame(sorted_dict, index=[0])
 
-
-# turn a bunch of dicts to dataframe and concatenate
-def dicts_to_dataframe(dictionaries):
-    return concat(
-        (sorted_dataframe(dictionary) for dictionary in dictionaries),
-        ignore_index=True,
-    )
-
-
 # combine all the csvs in a folder into a dataframe
 def combine_folder_csvs(folder):
     return concat(
@@ -113,9 +104,9 @@ def is_empty_div(thing):
     return all(is_empty_div(child) for child in thing.contents)
 
 
-def save_page(browser, junk_css, filename):
+def save_page(browser, junk_selectors, filename):
     page = BeautifulSoup(browser.page_source, features="lxml")
-    for junk in page.select(junk_css):
+    for junk in page.select(", ".join(junk_selectors)):
         junk.extract()
     for comment in page(text=lambda text: isinstance(text, Comment)):
         comment.extract()
@@ -124,7 +115,7 @@ def save_page(browser, junk_css, filename):
             div.extract()
 
     with open(filename, "w") as file:
-        file.write(str(page))
+        file.write(page.prettify())
 
 
 def wait_for_amazon(browser):
@@ -164,3 +155,16 @@ def wait_for_amazon(browser):
             raise WentWrongError()
 
         raise an_error
+    
+
+def read_html(folder, filename):
+    with open(path.join(folder, filename + ".html"), "r") as file:
+        return BeautifulSoup(file, "lxml")
+
+def refilter_html(folder, junk_selectors):
+    for filename in get_filenames(folder):
+        page = read_html(folder, filename)
+        for junk in page.select(", ".join(junk_selectors)):
+            junk.extract()
+        with open(path.join(folder, filename + ".html"), "w") as file:
+            file.write(page.prettify())

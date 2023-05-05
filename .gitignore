@@ -7,3 +7,5 @@ __pycache__
 /data/product_logs/*
 /data/product_pages/*
 /data/product_results/*
+/data/search_results.csv
+/data/product_results.csv

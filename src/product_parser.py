@@ -1,16 +1,11 @@
-from bs4 import BeautifulSoup
-from os import chdir, path
+from pandas import concat, DataFrame
 import re
-
-FOLDER = "/home/brandon/amazon_scraper"
-chdir(FOLDER)
-from utilities import dicts_to_dataframe, get_filenames, only
+from src.utilities import get_filenames, only, read_html
 
 
 # e.g. 1,000 -> 1000
 def remove_commas(a_string):
     return a_string.replace(",", "")
-
 
 def get_price(price_widget):
     # some prices have separate dollar and cent parts
@@ -54,47 +49,98 @@ def has_partial_buyboxes(page):
 
 
 def get_histogram_rows(page):
-    return page.select(".cr-widget-TitleRatingsHistogram .a-histogram-row")
-
-
-def get_product_name(page):
-    title_elements = page.select(
-        "span#productTitle, span.qa-title-text, h1[data-automation-id='title']"
+    return page.select(
+        ", ".join([
+            ".cr-widget-TitleRatingsHistogram .a-histogram-row",
+            # first span is the number of stars, the div is the bar, and the second span is the percent
+            "a[data-automation-id*='histogram-row'] span + div + span"
+        ])
     )
-    if len(title_elements) > 0:
-        return only(title_elements).text.strip()
 
-    return only(page.select("h1[data-testid='title-art'] img"))["alt"]
+class NotFiveHistogramRows(Exception):
+    pass
 
+class NotNoReviewsText(Exception):
+    pass
 
-# filename = "380"
-def parse_product_pages(product_pages_folder):
+class NotUnsupportedText(Exception):
+    pass
+
+# product_id = "380"
+def parse_product_pages(product_pages_folder, max_products = 10**6):
     product_rows = []
-    for filename in get_filenames(product_pages_folder):
+    for (index, product_filename) in enumerate(get_filenames(product_pages_folder)):
+        if index > max_products:
+            break
         # all digits
-        if not (re.match(r"^\d+$", filename) is None):
-            product_data = {}
-            file = open(path.join(product_pages_folder, filename + ".html"), "r")
-            page = BeautifulSoup(file, "lxml")
+        if re.match(r"\-sellers$", product_filename) is None:
+            page = read_html(product_pages_folder, product_filename)
+        
             try:
-                product_data["product_name"] = get_product_name(page)
-                average_ratings = page.select(
-                    ".cr-widget-TitleRatingsHistogram span[data-hook='rating-out-of-text']",
+                unsupported_browser_widgets = page.select("h2.heading.title")
+                if len(unsupported_browser_widgets) > 0:
+                    if only(unsupported_browser_widgets).text.strip() != "Your browser is not supported":
+                        raise NotUnsupportedText()
+                    continue
+
+                video_widgets = page.select("div.av-page-desktop")
+                if len(video_widgets) > 0:
+                    # sanity check
+                    only(video_widgets)
+                    continue
+                
+                music_widgets = page.select("music-app")
+                if len(music_widgets) > 0:
+                    # sanity check
+                    only(music_widgets)
+                    continue
+
+                medication_widgets = page.select("a#nav-link-pharmacy-home-desktop")
+                if len(medication_widgets) > 0:
+                    only(medication_widgets)
+                    continue
+                
+                no_reviews_widgets = page.select(
+                    ", ".join([
+                        "span[data-hook='top-customer-reviews-title']",
+                        "#cm_cr_dp_d_rating_histogram span.a-text-bold"
+                    ])
                 )
-                if len(average_ratings) > 0:
-                    # TODO: sanity check verify no ratings
-                    product_data["average_rating"] = float(
+                if len(no_reviews_widgets) > 0:
+                    no_reviews_text = only(no_reviews_widgets).text.strip()
+                    if not (no_reviews_text == "No customer reviews" or no_reviews_text == "There are no customer ratings or reviews for this product."):
+                        raise NotNoReviewsText()
+                    has_reviews = False
+                
+                    ratings_but_no_reviews_widgets = page.select(
+                        "div.review div.a-box-inner"
+                    )
+                    if len(ratings_but_no_reviews_widgets) > 0:
+                        # sanity check
+                        only(ratings_but_no_reviews_widgets)                       
+                        has_ratings = True
+                    else:
+                        has_ratings = False
+                else:
+                    has_reviews = True
+                    has_ratings = True
+
+                # ratings arent displayed for videos
+                if has_ratings:
+                    average_rating = float(
                         re.search(
-                            r"^(.*) out of 5$", only(average_ratings).text.strip()
+                            r"^(.*) out of 5$", only(page.select(
+                                "span.cr-widget-TitleRatingsHistogram span[data-hook='rating-out-of-text']"
+                            )).text.strip()
                         ).group(1)
                     )
-                    product_data["number_of_ratings"] = int(
+                    number_of_ratings = int(
                         remove_commas(
                             re.search(
                                 r"^(.*) global ratings?$",
                                 only(
                                     page.select(
-                                        '.cr-widget-TitleRatingsHistogram div[data-hook="total-review-count"], .cr-widget-TitleRatingsHistogram span[data-hook="total-review-count"]'
+                                        "span.cr-widget-TitleRatingsHistogram [data-hook='total-review-count']", 
                                     )
                                 ).text.strip(),
                             ).group(1)
@@ -104,26 +150,52 @@ def parse_product_pages(product_pages_folder):
                         ".cr-widget-TitleRatingsHistogram .a-histogram-row"
                     )
                     if len(histogram_rows) != 5:
-                        raise "Unexpected number of histogram rows!"
+                        raise NotFiveHistogramRows()
 
-                    product_data["five_star_percentage"] = get_star_percentage(
+                    five_star_percentage = get_star_percentage(
                         histogram_rows[0]
                     )
-                    product_data["four_star_percentage"] = get_star_percentage(
+                    four_star_percentage = get_star_percentage(
                         histogram_rows[1]
                     )
-                    product_data["three_star_percentage"] = get_star_percentage(
+                    three_star_percentage = get_star_percentage(
                         histogram_rows[2]
                     )
-                    product_data["two_star_percentage"] = get_star_percentage(
+                    two_star_percentage = get_star_percentage(
                         histogram_rows[3]
                     )
-                    product_data["one_star_percentage"] = get_star_percentage(
+                    one_star_percentage = get_star_percentage(
                         histogram_rows[4]
                     )
+                else:
+                    average_rating = None
+                    number_of_ratings = None
+                    one_star_percentage = None
+                    two_star_percentage = None
+                    three_star_percentage = None
+                    four_star_percentage = None
+                    five_star_percentage = None
+
+                product_rows.append(DataFrame({
+                    "product_filename": product_filename,
+                    "average_rating": average_rating,
+                    "has_reviews": has_reviews,
+                    "number_of_ratings": number_of_ratings,
+                    "one_star_percentage": one_star_percentage,
+                    "two_star_percentage": two_star_percentage,
+                    "three_star_percentage": three_star_percentage,
+                    "four_star_percentage": four_star_percentage,
+                    "five_star_percentage": five_star_percentage
+                }, index = [0]))
+
+                # undeliverable_messages = page.select(
+                #     By.CSS_SELECTOR,
+                #     box_prefix
+                #     + "#exports_desktop_undeliverable_buybox_priceInsideBuybox_feature_div",
+                # )
+
             except Exception as exception:
-                print(filename)
-                file.close()
+                print(product_filename)
                 raise exception
             # product_name = get_product_name(page)
             # product_data["product_name"] = product_name
@@ -191,11 +263,7 @@ def parse_product_pages(product_pages_folder):
             #         == "Temporarily out of stock.\nWe are working hard to be back in stock as soon as possible."
             #     )
 
-            # undeliverable_messages = page.select(
-            #     By.CSS_SELECTOR,
-            #     box_prefix
-            #     + "#exports_desktop_undeliverable_buybox_priceInsideBuybox_feature_div",
-            # )
+
 
             # if available:
             #     if len(undeliverable_messages) > 0:
@@ -395,7 +463,4 @@ def parse_product_pages(product_pages_folder):
             #         else:
             #             product_data[f"sub_category_{i}"] = None
 
-            file.close()
-            product_rows.append(product_data)
-
-    return dicts_to_dataframe(product_rows)
+    return concat(product_rows, ignore_index=True)

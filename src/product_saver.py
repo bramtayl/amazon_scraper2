@@ -1,18 +1,15 @@
+from base64 import urlsafe_b64encode as encode_url
 from datetime import datetime
-from os import chdir, path
+from os import path
 from pandas import DataFrame
-from selenium.webdriver.common.action_chains import ActionChains
+import re
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.common.exceptions import MoveTargetOutOfBoundsException, TimeoutException
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.support.expected_conditions import (
     presence_of_element_located as located,
 )
 from selenium.webdriver.support.wait import WebDriverWait as wait
-
-FOLDER = "/home/brandon/amazon_scraper"
-chdir(FOLDER)
-from utilities import (
+from src.utilities import (
     FoiledAgainError,
     GoneError,
     get_filenames,
@@ -24,39 +21,76 @@ from utilities import (
 )
 
 
+# stole from https://github.com/django/django/blob/main/django/utils/text.py
+def get_valid_filename(name):
+    # replace spaces with underscores
+    # remove anything that is not an alphanumeric, dash, underscore, or dot
+    return re.sub(r"(?u)[^-\w.]", "", name.replace(" ", "_"))[1:150]
+
 # sets of choices that one can choose from
 def get_choice_sets(browser):
     return browser.find_elements(
         By.CSS_SELECTOR, "#twister-plus-inline-twister > div.inline-twister-row"
     )
 
-
 # if buy box hasn't fully loaded because its waiting for users to make a choice
 def has_partial_buyboxes(browser):
     return len(browser.find_elements(By.CSS_SELECTOR, "#partialStateBuybox")) > 0
 
+JUNK_SELECTORS = [
+    "map",
+    "meta",
+    "noscript",
+    "script",
+    "style",
+    "svg",
+    "video",
+    "#ad-endcap-1_feature_div",
+    "#ad-display-center-1_feature_div",
+    "#amsDetailRight_feature_div",
+    "#aplusBrandStory_feature_div",
+    "#beautyRecommendations_feature_div",
+    "#discovery-and-inspiration_feature_div",
+    "#dp-ads-center-promo_feature_div",
+    "#dp-ads-center-promo-top_feature_div",
+    "#dp-ads-middle_feature_div",
+    "#gridgetWrapper",
+    "#HLCXComparisonWidget_feature_div",
+    "#imageBlock_feature_div",
+    "#navbar-main",
+    "#navFooter",
+    "#navtop",
+    "#nav-upnav",
+    "#percolate-ui-ilm_div",
+    "#postsSameBrandCard_feature_div",
+    "#product-ads-feedback_feature_div",
+    "#similarities_feature_div",
+    "#skiplink",
+    "#storeDisclaimer_feature_div",
+    "#va-related-videos-widget_feature_div",
+    "#valuePick_feature_div",
+    "#sims-themis-sponsored-products-2_feature_div",
+    "#sponsoredProducts2_feature_div",
+    ".reviews-display-ad"
+]
 
-# TODO:
-# ask-btf_feature_div is the Q&A section
-# it might be nice for relevance to have but isn't showing up in the HTML anyway...
-JUNK_CSS = "map, meta, noscript, script, style, svg, video, #ad-endcap-1_feature_div, #ad-display-center-1_feature_div, #amsDetailRight_feature_div, #aplusBrandStory_feature_div, #beautyRecommendations_feature_div, #discovery-and-inspiration_feature_div, #dp-ads-center-promo_feature_div, #dp-ads-center-promo-top_feature_div, #dp-ads-middle_feature_div, #gridgetWrapper, #HLCXComparisonWidget_feature_div, #imageBlock_feature_div, #navbar-main, #navFooter, #navtop, #nav-upnav, #percolate-ui-ilm_div, #postsSameBrandCard_feature_div, #product-ads-feedback_feature_div, #similarities_feature_div, #skiplink, #storeDisclaimer_feature_div, #va-related-videos-widget_feature_div, #valuePick_feature_div, #sims-themis-sponsored-products-2_feature_div, #sponsoredProducts2_feature_div, .reviews-display-ad"
 
-
-# url = product_url_data.loc[:, "url"][0]
+# product_url = search_results_data.loc[:, "product_url"][0]
 def save_product_page(
     browser,
-    product_id,
-    url,
+    product_url,
     product_logs_folder,
     product_pages_folder,
 ):
-    if url.startswith("http"):
-        browser.get(url)
+    if product_url.startswith("http"):
+        browser.get(product_url)
     else:
-        browser.get("https://www.amazon.com" + url)
+        browser.get("https://www.amazon.com" + product_url)
+
+    product_filename = get_valid_filename(product_url)
     
-    DataFrame({"product_id": [product_id], "datetime": [datetime.now()]}).to_csv(
-        path.join(product_logs_folder, product_id + ".csv"), index=False
+    DataFrame({"product_url": product_url, "datetime": datetime.now()}, index = [0]).to_csv(
+        path.join(product_logs_folder, product_filename + ".csv"), index=False
     )
 
     wait_for_amazon(browser)
@@ -106,7 +140,7 @@ def save_product_page(
         )
 
     save_page(
-        browser, JUNK_CSS, path.join(product_pages_folder, product_id + ".html")
+        browser, JUNK_SELECTORS, path.join(product_pages_folder, product_filename + ".html")
     )
 
     # if we have to pick a seller, save a second page with the seller list
@@ -125,14 +159,13 @@ def save_product_page(
         # save the second page
         save_page(
             browser,
-            JUNK_CSS,
-            path.join(product_pages_folder, product_id + "-sellers.html"),
+            JUNK_SELECTORS,
+            path.join(product_pages_folder, product_filename + "-sellers.html"),
         )
-
 
 def save_product_pages(
     browser_box,
-    product_url_data,
+    product_urls,
     product_logs_folder,
     product_pages_folder,
     user_agents,
@@ -141,34 +174,31 @@ def save_product_pages(
     browser = new_browser(user_agents[user_agent_index], fakespot=True)
     browser_box.append(browser)
 
-    completed_product_ids = get_filenames(product_pages_folder)
+    completed_product_filenames = get_filenames(product_pages_folder)
 
     # no previous product, so starts empty
     # url = product_url_data.loc[:, "url"][0]
-    for product_id, url in zip(
-        product_url_data.loc[:, "product_id"], product_url_data.loc[:, "url"]
-    ):
+    for product_url in product_urls:
         # don't save a product we already have
-        if product_id in completed_product_ids:
+        if get_valid_filename(product_url) in completed_product_filenames:
             continue
 
         try:
             save_product_page(
                 browser,
-                product_id,
-                url,
+                product_url,
                 product_logs_folder,
                 product_pages_folder,
             )
         except GoneError:
             # if the product is gone, print some debug information, and just continue
-            print(str(product_id) + ": " + url)
+            print(product_url)
             print("Page no longer exists, skipping")
             continue
         except TimeoutException:
             # if the product times out, print some debug information, and just continue
             # come back to get it later
-            print(str(product_id) + ": " + url)
+            print(product_url)
             print("Timeout, skipping")
             continue
         except FoiledAgainError:
@@ -182,19 +212,18 @@ def save_product_pages(
             try:
                 save_product_page(
                     browser,
-                    product_id,
-                    url,
+                    product_url,
                     product_logs_folder,
                     product_pages_folder,
                 )
             # hande the errors above again, except for the FoiledAgain error
             # if there's still a captcha this time, just give up
             except GoneError:
-                print(str(product_id) + ": " + url)
+                print(product_url)
                 print("Page no longer exists, skipping")
                 continue
             except TimeoutException:
-                print(str(product_id) + ": " + url)
+                print(product_url)
                 print("Timeout, skipping")
                 continue
 

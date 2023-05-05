@@ -8,7 +8,7 @@ from selenium.webdriver.support.ui import Select
 
 FOLDER = "/home/brandon/amazon_scraper"
 chdir(FOLDER)
-from utilities import (
+from src.utilities import (
     FoiledAgainError,
     get_filenames,
     new_browser,
@@ -70,7 +70,33 @@ def save_search_page(
     # save the page to the folder
     save_page(
         browser,
-        "map, meta, noscript, script, style, svg, video, #rhf, span[data-component-type='s-filters-panel-view'], a[title='tab to skip to main search results'], #navbar-main, span[data-component-type='s-result-info-bar'], div[data-cel-widget*='MAIN-TEXT_REFORMULATION'], div[cel_widget_id*='MAIN-TEXT_REFORMULATION'], div[data-csa-c-painter='multi-brand-creative-desktop-cards'], #ape_Search_auto-bottom-advertising-0_portal-batch-fast-btf-loom_placement, #navFooter, div[data-cel-widget*='LEFT-SAFE_FRAME'], div.widgetId\\=loom-desktop-top-slot_automotive-part-finder, div[cel_widget_id*='MAIN-FEEDBACK'], div[cel_widget_id*='MAIN-PAGINATION']",
+        [
+            "map",
+            "meta", 
+            "noscript",
+            "script", 
+            "style", 
+            "svg", 
+            "video",
+            "#rhf",
+            "span[data-component-type='s-filters-panel-view']",
+            "a[title='tab to skip to main search results']",
+            "#navbar-main",
+            "span[data-component-type='s-result-info-bar']",
+            "div[cel_widget_id*='MAIN-QUESTION_ANSWER']",
+            "div[cel_widget_id*='VISUAL_NAVIGATION']",
+            "div[cel_widget_id*='MAIN-SHOPPING_ADVISER']",
+            "div[cel_widget_id*='MAIN-FEATURED_ASINS_LIST']",
+            "div[cel_widget_id*='MAIN-TEXT_REFORMULATION']",
+            "div[data-csa-c-painter*='creative-desktop-card']",
+            "#ape_Search_auto-bottom-advertising-0_portal-batch-fast-btf-loom_placement",
+            "#navFooter",
+            "div[data-cel-widget*='LEFT-SAFE_FRAME']",
+            "div.widgetId\\=loom-desktop-top-slot_automotive-part-finder",
+            "div[cel_widget_id*='MAIN-FEEDBACK']",
+            "div[cel_widget_id*='MAIN-PAGINATION']",
+            "div.s-main-slot.s-result-list > div[data-component-type='s-search-result'][data-asin='']",
+        ],
         path.join(search_pages_folder, search_id + ".html"),
     )
 
