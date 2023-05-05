@@ -1,8 +1,6 @@
-from base64 import urlsafe_b64encode as encode_url
 from datetime import datetime
 from os import path
 from pandas import DataFrame
-import re
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.support.expected_conditions import (
@@ -11,6 +9,7 @@ from selenium.webdriver.support.expected_conditions import (
 from selenium.webdriver.support.wait import WebDriverWait as wait
 from src.utilities import (
     FoiledAgainError,
+    get_valid_filename,
     GoneError,
     get_filenames,
     new_browser,
@@ -19,13 +18,6 @@ from src.utilities import (
     wait_for_amazon,
     WAIT_TIME,
 )
-
-
-# stole from https://github.com/django/django/blob/main/django/utils/text.py
-def get_valid_filename(name):
-    # replace spaces with underscores
-    # remove anything that is not an alphanumeric, dash, underscore, or dot
-    return re.sub(r"(?u)[^-\w.]", "", name.replace(" ", "_"))[1:150]
 
 # sets of choices that one can choose from
 def get_choice_sets(browser):
@@ -142,6 +134,7 @@ def save_product_page(
     save_page(
         browser, JUNK_SELECTORS, path.join(product_pages_folder, product_filename + ".html")
     )
+    print(product_filename)
 
     # if we have to pick a seller, save a second page with the seller list
     choose_seller_buttons = browser.find_elements(

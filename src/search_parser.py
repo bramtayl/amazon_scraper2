@@ -1,6 +1,6 @@
 
 from pandas import concat, DataFrame
-from src.utilities import get_filenames, only, read_html
+from src.utilities import get_filenames, get_valid_filename, only, read_html
 
 # index = 0
 # file = open(path.join(search_pages_folder, search_id + ".html"), "r")
@@ -15,25 +15,31 @@ def parse_search_result(search_id, search_result, index):
         # sanity check
         only(sponsored_tags)
         sponsored = True
+    
+    product_url = only(
+        search_result.select(
+            # a link in a heading
+            "h2 a",
+        )
+    )["href"]
 
     return DataFrame(
         {
             "search_id": search_id,
             "rank": index + 1,
-            "product_url": only(
-                search_result.select(
-                    # a link in a heading
-                    "h2 a",
-                )
-            )["href"],
-            "sponsored": sponsored
+            "product_url": product_url,
+            "sponsored": sponsored,
+            "product_filename": get_valid_filename(product_url)
         },
         # one row
         index=range(1),
     )
 
+class DuplicateProductFilenames(Exception):
+    pass
+
 def parse_search_page(search_pages_folder, search_id):
-    return concat(
+    search_results = concat(
         (
             parse_search_result(search_id, search_result, index)
             for index, search_result in enumerate(
@@ -45,6 +51,10 @@ def parse_search_page(search_pages_folder, search_id):
         ),
         ignore_index=True
     )
+    if len(set(search_results.loc[:, "product_url"])) != len(set(search_results.loc[:, "product_filename"])):
+        raise DuplicateProductFilenames()
+    
+    return search_results
 
 
 def parse_search_pages(search_pages_folder):

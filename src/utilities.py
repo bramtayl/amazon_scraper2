@@ -161,10 +161,8 @@ def read_html(folder, filename):
     with open(path.join(folder, filename + ".html"), "r") as file:
         return BeautifulSoup(file, "lxml")
 
-def refilter_html(folder, junk_selectors):
-    for filename in get_filenames(folder):
-        page = read_html(folder, filename)
-        for junk in page.select(", ".join(junk_selectors)):
-            junk.extract()
-        with open(path.join(folder, filename + ".html"), "w") as file:
-            file.write(page.prettify())
+# stole from https://github.com/django/django/blob/main/django/utils/text.py
+def get_valid_filename(name):
+    # replace spaces with underscores
+    # remove anything that is not an alphanumeric, dash, underscore, or dot
+    return re.sub(r"(?u)[^-\w.]", "", name.replace(" ", "_"))[1:150]

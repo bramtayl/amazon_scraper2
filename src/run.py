@@ -1,10 +1,9 @@
 from os import path
 from pandas import read_csv
-
 from src.search_saver import save_search_pages
 from src.search_parser import parse_search_pages
 from src.product_saver import save_product_pages
-from src.product_parser import parse_product_pages
+from src.product_parser import find_product, parse_product_pages
 
 search_pages_folder = path.join("data", "search_pages")
 product_pages_folder = path.join("data", "product_pages")
@@ -37,7 +36,17 @@ user_agent_index = save_product_pages(
 for browser in browser_box:
     browser.close()
 
+find_product(product_pages_folder, "span.priceWrapper")
+
+# new
+# used
+# sns
+# renewed
+# audibleCash
+# audibleUpsell
+# deals
 parse_product_pages(product_pages_folder).to_csv(path.join("data", "product_results.csv"), index = False)
+
 
 # TODO:
 # number of option boxes
@@ -58,3 +67,4 @@ parse_product_pages(product_pages_folder).to_csv(path.join("data", "product_resu
 # movie_title: https://www.amazon.com/Avatar-Way-Water-Sam-Worthington/dp/B0B72TVT92/ref=sr_1_14?keywords=dvd+movies&qid=1681822652&sr=8-14
 # title is image: https://www.amazon.com/Wing-Prayer-Dennis-Quaid/dp/B0B75TB7H8/ref=sr_1_15?keywords=dvd+movies&qid=1681822652&sr=8-15
 # total review count is a span: https://www.amazon.com/Metallic-Glitter-Comforter-Printed-Bedding/dp/B09CT6C3N9/ref=sr_1_54?keywords=queen+comforter+set&qid=1681822595&sr=8-54
+# number of reviews, not ratings
