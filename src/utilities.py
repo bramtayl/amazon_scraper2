@@ -157,8 +157,8 @@ def wait_for_amazon(browser):
         raise an_error
     
 
-def read_html(folder, filename):
-    with open(path.join(folder, filename + ".html"), "r") as file:
+def read_html(file):
+    with open(file, "r") as file:
         return BeautifulSoup(file, "lxml")
 
 # stole from https://github.com/django/django/blob/main/django/utils/text.py

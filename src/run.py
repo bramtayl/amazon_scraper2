@@ -3,11 +3,12 @@ from pandas import read_csv
 from src.search_saver import save_search_pages
 from src.search_parser import parse_search_pages
 from src.product_saver import save_product_pages
-from src.product_parser import find_product, parse_product_pages
+from src.product_parser import find_products, parse_product_pages
 
 search_pages_folder = path.join("data", "search_pages")
-product_pages_folder = path.join("data", "product_pages")
 search_results_file = path.join("data", "search_results.csv")
+product_pages_folder = path.join("data", "product_pages")
+
 
 browser_box = []
 user_agents = read_csv(path.join("data", "user_agents.csv")).loc[:, "user_agent"]
@@ -36,7 +37,7 @@ user_agent_index = save_product_pages(
 for browser in browser_box:
     browser.close()
 
-find_product(product_pages_folder, "span.priceWrapper")
+find_products(product_pages_folder, "a[title='See All Buying Options']")
 
 # new
 # used

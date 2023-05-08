@@ -1,100 +1,19 @@
-from bs4 import Tag
 from os import path
 from pandas import concat, DataFrame
 import re
 from src.utilities import get_filenames, only, read_html
 import webbrowser
 
-def find_product(product_pages_folder, selector):
+def find_products(product_pages_folder, selector, number_of_products = 5):
+    found = 0
     for product_filename in get_filenames(product_pages_folder):
-        product_page = read_html(product_pages_folder, product_filename)
+        product_file = path.join(product_pages_folder, product_filename + ".html")
+        product_page = read_html(product_file)
         if len(product_page.select(selector)) > 0:
-            webbrowser.open(path.join(product_pages_folder, product_filename + ".html"))
-            break
-
-def is_complicated(product_page):
-    unsupported_browser_widgets = product_page.select("h2.heading.title")
-    if len(unsupported_browser_widgets) > 0:
-        if only(unsupported_browser_widgets).text.strip() != "Your browser is not supported":
-            raise NotUnsupported()
-        return True
-    
-    book_widgets = product_page.select("div.book")
-    if len(book_widgets) > 0:
-        only(book_widgets)
-        return True
-    
-    ebook_widgets = product_page.select("div#dp.ebooks")
-    if len(ebook_widgets) > 0:
-        only(ebook_widgets)
-        return True
-    
-    e_magazine_widgets = product_page.select("div.digitaltextfeeds")
-    if len(e_magazine_widgets) > 0:
-        only(e_magazine_widgets)
-        return True
-    
-    digital_music_widgets = product_page.select("music-app")
-    if len(digital_music_widgets) > 0:
-        # sanity check
-        only(digital_music_widgets)
-        return True
-
-    digital_video_widgets = product_page.select(",".join([
-        "div.av-product_page-desktop", 
-        "div.av-page-desktop"
-    ]))
-    if len(digital_video_widgets) > 0:
-        # sanity check
-        only(digital_video_widgets)
-        return True
-    
-    digital_software_widgets = product_page.select("div.digital_software")
-    if len(digital_software_widgets) > 0:
-        only(digital_software_widgets)
-        return True
-    
-    mobile_widgets = product_page.select("div.device-type-desktop")
-    if len(mobile_widgets):
-        only(mobile_widgets)
-        return True
-    
-    app_widgets = product_page.select("div.masrw-box")
-    if len(app_widgets) > 0:
-        only(app_widgets)
-        return True
-    
-    alexa_skill_widgets = product_page.select("img[data-cy='alexa-free-skill-logo']")
-    if len(alexa_skill_widgets):
-        only(alexa_skill_widgets)
-        return True
-    
-    medication_widgets = product_page.select("a#nav-link-pharmacy-home-desktop")
-    if len(medication_widgets) > 0:
-        only(medication_widgets)
-        return True
-    
-    gift_card_widgets = product_page.select("div#gc-detail-page")
-    if len(gift_card_widgets) > 0:
-        only(gift_card_widgets)
-        return True
-    
-    subscription_widgets = product_page.select("div#sndboxBuyBox_feature_div")
-    if len(subscription_widgets) > 0:
-        only(subscription_widgets)
-        return True
-    
-    audible_widgets = product_page.select("div.audible")
-    if len(audible_widgets) > 0:
-        only(audible_widgets)
-        return True
-    
-    choose_seller_widgets = product_page.select("a[title='See All Buying Options']")
-    if len(choose_seller_widgets) > 0:
-        only(choose_seller_widgets)
-        return True
-    
-    return False
+            webbrowser.open(product_file)
+            found = found + 1
+            if found == number_of_products:
+                break
 
 # e.g. 1,000 -> 1000
 def remove_commas(a_string):
@@ -127,288 +46,274 @@ class NoBuyBox(Exception):
 class UnrecognizedBuybox(Exception):
     pass
 
+def parse_product_page(product_pages_folder, product_filename, product_type, product_page):
+
+    average_rating = None
+    number_of_ratings = None
+    one_star_percentage = None
+    two_star_percentage = None
+    three_star_percentage = None
+    four_star_percentage = None
+    five_star_percentage = None
+
+    ratings_widgets = product_page.select("span.cr-widget-TitleRatingsHistogram")
+    if len(ratings_widgets) > 0:
+        ratings_widget = only(ratings_widgets)
+        average_ratings_widgets = ratings_widget.select("span[data-hook='rating-out-of-text']")
+        if len(average_ratings_widgets) > 0:
+            average_rating = float(
+                re.search(
+                    r"^(.*) out of 5$", only(average_ratings_widgets).text.strip()
+                ).group(1)
+            )
+            number_of_ratings = int(
+                remove_commas(
+                    re.search(
+                        r"^(.*) global ratings?$",
+                        only(
+                            ratings_widget.select(
+                                "[data-hook='total-review-count']", 
+                            )
+                        ).text.strip(),
+                    ).group(1)
+                )
+            )
+            histogram_rows = ratings_widget.select(
+                ".a-histogram-row"
+            )
+            if len(histogram_rows) != 5:
+                raise NotFiveRows()
+
+            five_star_percentage = get_star_percentage(
+                histogram_rows[0]
+            )
+            four_star_percentage = get_star_percentage(
+                histogram_rows[1]
+            )
+            three_star_percentage = get_star_percentage(
+                histogram_rows[2]
+            )
+            two_star_percentage = get_star_percentage(
+                histogram_rows[3]
+            )
+            one_star_percentage = get_star_percentage(
+                histogram_rows[4]
+            )
+
+    hidden_price_widgets = product_page.select("a[href='/forum/where%20is%20the%20price']")
+    if len(hidden_price_widgets) > 0:
+        only(hidden_price_widgets)
+        hidden_prices = True
+    else:
+        hidden_prices = False
+
+    accordion_rows = product_page.select("#buyBoxAccordion div[id*='AccordionRow']")
+    if len(accordion_rows) > 0:
+        buybox = accordion_rows[0]
+    else:
+        buybox = only(product_page.select("div[data-csa-c-content-id='desktop_buybox_group_1']"))
+
+    out_of_stock_widgets = buybox.select("div#outOfStock")
+    if len(out_of_stock_widgets) > 0:
+        only(out_of_stock_widgets)
+        out_of_stock = True
+    else:
+        out_of_stock = False
+    
+    undeliverable_widgets = buybox.select("div#exports_desktop_undeliverable_buybox") 
+    if len(undeliverable_widgets) > 0:
+        only(undeliverable_widgets)
+        undeliverable = True
+    else:
+        undeliverable = False
+    
+    price = None
+    unit_price = None
+    unit_text = ""
+    
+    offer_price_widgets = buybox.select("div.a-grid-center span.offer-price")
+    if len(offer_price_widgets) > 0:
+        price = get_price(only(offer_price_widgets))
+
+    renewed_price_widgets = buybox.select("span#renewedBuyBoxPrice")
+    if len(renewed_price_widgets) > 0:
+        price = get_price(only(renewed_price_widgets))
+
+    price_pair_widgets = buybox.select("div#corePrice_feature_div")
+    if len(price_pair_widgets) > 0:
+        price_pair_widget = only(price_pair_widgets)
+        unit_text = price_pair_widget.text.strip()
+        price_widgets = price_pair_widget.select("span.a-offscreen")
+        if len(price_widgets) == 0:
+            pass
+        elif len(price_widgets) == 1:
+            price = get_price(price_widgets[0])
+        elif len(price_widgets) == 2:
+            price = get_price(price_widgets[0])
+            unit_price = get_price(price_widgets[0])
+        else:
+            raise NotOneOrTwoPrices()
+
+    availability_widgets = buybox.select("div#availability")
+    if len(availability_widgets) > 0:
+        availability = only(availability_widgets).text.strip()
+    else:
+        availability = ""
+
+    non_returnable_widgets = product_page.select("div#dsvReturnPolicyMessage_feature_div")
+    if len(non_returnable_widgets) > 0:
+        returns = only(non_returnable_widgets).text.strip()
+    else:
+        returns_widgets = buybox.select("a#creturns-policy-anchor-text")
+        if len(returns_widgets) > 0:
+            returns = only(returns_widgets).text.strip()
+        else:
+            returns = ""
+
+    primary_delivery_widgets = buybox.select("div#mir-layout-DELIVERY_BLOCK-slot-PRIMARY_DELIVERY_MESSAGE_LARGE span.a-text-bold")
+    if len(primary_delivery_widgets):
+        primary_delivery_date = only(primary_delivery_widgets).text.strip()
+    else:
+        primary_delivery_date = ""
+
+    secondary_delivery_widgets = buybox.select("div#mir-layout-DELIVERY_BLOCK-slot-SECONDARY_DELIVERY_MESSAGE_LARGE span.a-text-bold")
+    if len(secondary_delivery_widgets) > 0:
+        secondary_delivery_date = only(secondary_delivery_widgets).text.strip()
+    else:
+        secondary_delivery_date = ""
+
+    ships_from_widgets = buybox.select("div.tabular-buybox-text[tabular-attribute-name='Ships from']")
+    if len(ships_from_widgets) > 0:
+        ships_from = only(ships_from_widgets).text.strip()
+    else:
+        ships_from = ""
+
+    sold_by_widgets = buybox.select("div.tabular-buybox-text[tabular-attribute-name='Sold by']")
+    if len(sold_by_widgets) > 0:
+        sold_by = only(sold_by_widgets).text.strip()
+    else:
+        sold_by = ""
+
+    fakespot_widgets = product_page.select("div.fakespot-main-grade-box-wrapper")
+    if len(fakespot_widgets) > 0:
+        fakespot_grade = only(product_page.select("div#fs-letter-grade-box")).text.strip()
+    else:
+        fakespot_grade = ""
+
+    category_widgets = product_page.select("div#wayfinding-breadcrumbs_feature_div ul.a-unordered-list li:last-of-type")
+    if len(category_widgets) > 0:
+        category = only(category_widgets).text.strip()
+    else:
+        category = ""
+
+    new_seller_widgets = product_page.select("div#fakespot-badge")
+    if len(new_seller_widgets) > 0:
+        only(new_seller_widgets)
+        new_seller = True
+    else:
+        new_seller = False
+
+    climate_friendly_widgets = product_page.select("div#climatePledgeFriendly")
+    if len(climate_friendly_widgets) > 0:
+        only(climate_friendly_widgets)
+        climate_friendly = True
+    else:
+        climate_friendly = False
+
+    subscription_widgets = product_page.select("div#snsAccordionRowMiddle")
+    if len(subscription_widgets):
+        subscription_available = True
+    else:
+        subscription_available = False
+
+    choose_seller_widgets = product_page.select("a[title='See All Buying Options']")
+    if len(choose_seller_widgets) > 0:
+        only(choose_seller_widgets)
+        sellers_page = read_html(path.join(product_pages_folder, product_filename + "-sellers.html"))
+        # TODO: all the stuff here
+
+    amazons_choice_widgets = product_page.select("acBadge_feature_div")
+    if len(amazons_choice_widgets) > 0:
+        only(amazons_choice_widgets)
+        amazons_choice = True
+    else:
+        amazons_choice = False
+
+    return DataFrame({
+        "product_filename": product_filename,
+        "average_rating": average_rating,
+        "number_of_ratings": number_of_ratings,
+        "one_star_percentage": one_star_percentage,
+        "two_star_percentage": two_star_percentage,
+        "three_star_percentage": three_star_percentage,
+        "four_star_percentage": four_star_percentage,
+        "five_star_percentage": five_star_percentage,
+        "price": price,
+        "unit_price": unit_price,
+        "fakespot_grade": fakespot_grade,
+        "returns": returns,
+        "primary_delivery_date": primary_delivery_date,
+        "secondary_delivery_date": secondary_delivery_date,
+        "ships_from": ships_from,
+        "sold_by": sold_by,
+        "category": category,
+        "new_seller": new_seller,
+        "climate_friendly": climate_friendly,
+        "subscription_available": subscription_available,
+        "out_of_stock": out_of_stock,
+        "undeliverable": undeliverable,
+        "hidden_prices": hidden_prices,
+        "availability": availability,
+        "product_type": product_type,
+        "unit_text": unit_text
+    }, index = [0])
+        
+
 # product_id = "380"
 def parse_product_pages(product_pages_folder):
     product_rows = []
     for product_filename in get_filenames(product_pages_folder):
+        print(product_filename)
         # all digits
-        if re.match(r"\-sellers$", product_filename) is None:
-            product_page = read_html(product_pages_folder, product_filename)
+        if not(re.match(r"^.*\-sellers$", product_filename) is None):
+            continue
         
-            try:
-                if is_complicated(product_page):
-                    continue
+        product_page = read_html(path.join(product_pages_folder, product_filename + ".html"))
 
-                no_ratings_or_reviews_widgets = product_page.select(
-                    "#cm_cr_dp_d_rating_histogram span.a-text-bold"
-                )
-                no_reviews_widgets = product_page.select(
-                    "span[data-hook='top-customer-reviews-title']"
-                )
-                
-                if len(no_ratings_or_reviews_widgets) > 0:
-                    if only(no_ratings_or_reviews_widgets).text.strip() != "There are no customer ratings or reviews for this product.":
-                        raise NotNoReviews()
-                    has_ratings = False
-                    has_reviews = False
-                elif len(no_reviews_widgets) > 0:
-                    if only(no_reviews_widgets).text.strip() != "No customer reviews":
-                        raise NotNoReviews()
-                    has_reviews = False
+        try:
+            unsupported_browser_widgets = product_page.select("h2.heading.title")
+            if len(unsupported_browser_widgets) > 0:
+                if only(unsupported_browser_widgets).text.strip() != "Your browser is not supported":
+                    raise NotUnsupported()
+                continue
 
-                    ratings_summary_widgets = product_page.select(
-                        "div.review"
-                    )
-                    if len(ratings_summary_widgets) > 0:
-                        if re.search(
-                            r"^There are 0 customer reviews and (.*) customer ratings?\.$",
-                            only(ratings_summary_widgets).text.strip(),
-                        ) is None:
-                            raise NotReviewSummary()
-                        has_ratings = True
-                    else:
-                        has_ratings = False
-                else:
-                    has_ratings = True
-                    has_reviews = True
+            consider_alternative_widgets = product_page.select("div#percolate-ui-lpo_div")
+            if len(consider_alternative_widgets) > 0:
+                only(consider_alternative_widgets)
+                continue
+            
+            page_type_widgets = product_page.select("div#dp")
+            if len(page_type_widgets) == 0:
+                continue
+            
+            page_type = only(page_type_widgets)["class"][0]
+            if page_type == "book" or page_type == "ebooks" or page_type == "digitaltextfeeds" or page_type == "digital_software" or page_type == "device-type-desktop" or page_type == "audible" or page_type == "swa_physical":
+                continue
+            
+            product_rows.append(parse_product_page(product_pages_folder, product_filename, page_type, product_page))
 
-                if has_ratings:
-                    ratings_widget = only(product_page.select(
-                        "span.cr-widget-TitleRatingsHistogram"
-                    ))
-                    average_rating = float(
-                        re.search(
-                            r"^(.*) out of 5$", only(ratings_widget.select(
-                                "span[data-hook='rating-out-of-text']"
-                            )).text.strip()
-                        ).group(1)
-                    )
-                    number_of_ratings = int(
-                        remove_commas(
-                            re.search(
-                                r"^(.*) global ratings?$",
-                                only(
-                                    ratings_widget.select(
-                                        "[data-hook='total-review-count']", 
-                                    )
-                                ).text.strip(),
-                            ).group(1)
-                        )
-                    )
-                    histogram_rows = ratings_widget.select(
-                        ".a-histogram-row"
-                    )
-                    if len(histogram_rows) != 5:
-                        raise NotFiveRows()
+            # undeliverable_messages = product_page.select(
+            #     By.CSS_SELECTOR,
+            #     box_prefix
+            #     + "#exports_desktop_undeliverable_buybox_priceInsideBuybox_feature_div",
+            # )
 
-                    five_star_percentage = get_star_percentage(
-                        histogram_rows[0]
-                    )
-                    four_star_percentage = get_star_percentage(
-                        histogram_rows[1]
-                    )
-                    three_star_percentage = get_star_percentage(
-                        histogram_rows[2]
-                    )
-                    two_star_percentage = get_star_percentage(
-                        histogram_rows[3]
-                    )
-                    one_star_percentage = get_star_percentage(
-                        histogram_rows[4]
-                    )
-                else:
-                    average_rating = None
-                    number_of_ratings = None
-                    one_star_percentage = None
-                    two_star_percentage = None
-                    three_star_percentage = None
-                    four_star_percentage = None
-                    five_star_percentage = None
-                
-                hidden_price_widgets = product_page.select("a[href='/forum/where%20is%20the%20price']")
-                if len(hidden_price_widgets) > 0:
-                    hidden_prices = True
-                else:
-                    hidden_prices = False
-
-                if hidden_prices:
-                    price = None
-                    unit_price = None
-                else:
-                    accordion_rows = product_page.select("#buyBoxAccordion div[id*='AccordionRow']")
-                    if len(accordion_rows) > 0:
-                        buybox = accordion_rows[0]
-                    else:
-                        buybox_group = only(product_page.select("div[data-csa-c-content-id='desktop_buybox_group_1']"))
-                        buybox = only(buybox_group.select(", ".join([
-                            "div#qualifiedBuybox",
-                            "div#qualifiedBuybox_globalMatchbox_3",
-                            "div#usedOnlyBuybox",
-                            "div#outOfStockBuyBox_feature_div",
-                            "div#exportsBuybox",
-                        ])))
-                    
-                    buybox_id = buybox.get("id")
-                    if buybox_id == "usedOnlyBuybox":
-                        price = get_price(only(buybox.select("div.a-grid-center span.offer-price")))
-                        unit_price = None
-                        undeliverable = False
-                        out_of_stock = False
-                    elif buybox_id == "renewedTier2AccordionRow":
-                        price = get_price(only(buybox.select("span#renewedBuyBoxPrice")))
-                        unit_price = None
-                        undeliverable = False
-                        out_of_stock = False
-                    elif buybox_id == "newAccordionRow_0":
-                        undeliverable = False
-                        out_of_stock_widgets = buybox.select("div#outOfStock")
-                        if len(out_of_stock_widgets) > 0:
-                            only(out_of_stock_widgets)
-                            out_of_stock = True
-                            price = None
-                            unit_price = None
-                        else:
-                            out_of_stock = False
-                            price_widgets = buybox.select("div#corePrice_feature_div span.a-offscreen")
-                            if len(price_widgets) == 1:
-                                price = get_price(price_widgets[0])
-                                unit_price = None
-                            elif len(price_widgets) == 2:
-                                price = get_price(price_widgets[0])
-                                unit_price = get_price(price_widgets[0])
-                            else:
-                                raise NotOneOrTwoPrices()
-                    elif buybox_id == "qualifiedBuybox":
-                        undeliverable = False
-                        out_of_stock_widgets = buybox.select("div#outOfStock")
-                        if len(out_of_stock_widgets) > 0:
-                            only(out_of_stock_widgets)
-                            out_of_stock = True
-                            price = None
-                            unit_price = None
-                        else:
-                            out_of_stock = False
-                            price_widgets = buybox.select("div#corePrice_feature_div span.a-offscreen")
-                            if len(price_widgets) == 1:
-                                price = get_price(price_widgets[0])
-                                unit_price = None
-                            elif len(price_widgets) == 2:
-                                price = get_price(price_widgets[0])
-                                unit_price = get_price(price_widgets[0])
-                            else:
-                                raise NotOneOrTwoPrices()
-                    elif buybox_id == "qualifiedBuybox_globalMatchbox_3":
-                        undeliverable = False
-                        out_of_stock_widgets = buybox.select("div#outOfStock")
-                        if len(out_of_stock_widgets) > 0:
-                            only(out_of_stock_widgets)
-                            out_of_stock = True
-                            price = None
-                            unit_price = None
-                        else:
-                            out_of_stock = False
-                            price_widgets = buybox.select("div#corePrice_feature_div span.a-offscreen")
-                            if len(price_widgets) == 1:
-                                price = get_price(price_widgets[0])
-                                unit_price = None
-                            elif len(price_widgets) == 2:
-                                price = get_price(price_widgets[0])
-                                unit_price = get_price(price_widgets[0])
-                            else:
-                                raise NotOneOrTwoPrices()
-                    elif buybox_id == "newAccordionRow":
-                        undeliverable = False
-                        out_of_stock_widgets = buybox.select("div#outOfStock")
-                        if len(out_of_stock_widgets) > 0:
-                            only(out_of_stock_widgets)
-                            out_of_stock = True
-                            price = None
-                            unit_price = None
-                        else:
-                            out_of_stock = False
-                            price_widgets = buybox.select("div#corePrice_feature_div span.a-offscreen")
-                            if len(price_widgets) == 1:
-                                price = get_price(price_widgets[0])
-                                unit_price = None
-                            elif len(price_widgets) == 2:
-                                price = get_price(price_widgets[0])
-                                unit_price = get_price(price_widgets[0])
-                            else:
-                                raise NotOneOrTwoPrices()
-                    elif buybox_id == "exportsBuybox":
-                        undeliverable_widgets = buybox.select("div#exports_desktop_undeliverable_buybox")
-                        out_of_stock_widgets = buybox.select("div#outOfStock")
-                        if len(out_of_stock_widgets) > 0:
-                            only(out_of_stock_widgets)
-                            out_of_stock = True
-                            undeliverable = False
-                            price = None
-                            unit_price = None
-                        elif len(undeliverable_widgets) > 0:
-                            only(undeliverable_widgets)
-                            out_of_stock = False
-                            undeliverable = True
-                            price = None
-                            unit_price = None
-                        else:
-                            undeliverable = False
-                            out_of_stock = False
-                            price_widgets = buybox.select("div#corePrice_feature_div span.a-offscreen")
-                            if len(price_widgets) == 1:
-                                price = get_price(price_widgets[0])
-                                unit_price = None
-                            elif len(price_widgets) == 2:
-                                price = get_price(price_widgets[0])
-                                unit_price = get_price(price_widgets[0])
-                            else:
-                                raise NotOneOrTwoPrices()
-                    elif buybox_id == "outOfStockBuyBox_feature_div":
-                        price = None
-                        unit_price = None
-                        out_of_stock = True
-                        undeliverable = False
-                    elif buybox_id == "dealsAccordionRow":
-                        price_widgets = buybox.select("div#corePrice_feature_div span.a-offscreen")
-                        if len(price_widgets) == 1:
-                            price = get_price(price_widgets[0])
-                            unit_price = None
-                        elif len(price_widgets) == 2:
-                            price = get_price(price_widgets[0])
-                            unit_price = get_price(price_widgets[0])
-                        else:
-                            raise NotOneOrTwoPrices()
-
-                    else:
-                        raise UnrecognizedBuybox(buybox_id)
-                    
-                print(product_filename)
-
-                product_rows.append(DataFrame({
-                    "product_filename": product_filename,
-                    "average_rating": average_rating,
-                    "has_reviews": has_reviews,
-                    "number_of_ratings": number_of_ratings,
-                    "one_star_percentage": one_star_percentage,
-                    "two_star_percentage": two_star_percentage,
-                    "three_star_percentage": three_star_percentage,
-                    "four_star_percentage": four_star_percentage,
-                    "five_star_percentage": five_star_percentage,
-                    "price": price,
-                    "unit_price": unit_price,
-                    "out_of_stock": out_of_stock,
-                    "undeliverable": undeliverable,
-                    "hidden_prices": hidden_prices
-                }, index = [0]))
-
-                # undeliverable_messages = product_page.select(
-                #     By.CSS_SELECTOR,
-                #     box_prefix
-                #     + "#exports_desktop_undeliverable_buybox_priceInsideBuybox_feature_div",
-                # )
-
-            except Exception as exception:
-                webbrowser.open(path.join(product_pages_folder, product_filename + ".html"))
-                raise exception
+        except Exception as exception:
+            webbrowser.open(path.join(product_pages_folder, product_filename + ".html"))
+            sellers_file = path.join(product_pages_folder, product_filename + "-sellers.html")
+            if path.isfile(sellers_file):
+                webbrowser.open(sellers_file)
+            raise exception
             # product_name = get_product_name(product_page)
             # product_data["product_name"] = product_name
 
@@ -529,7 +434,7 @@ def parse_product_pages(product_pages_folder):
 
             #                 seller_prices = product_page.select(
             #                     By.CSS_SELECTOR,
-            #                     "#aod-offer-list > div:first-of-type .a-price",
+            #                     "div#aod-offer-list > div:first-of-type span.a-price",
             #                 )
             #                 if len(seller_prices) > 0:
             #                     product_data["current price"] = get_price(only(seller_prices))
