@@ -20,10 +20,10 @@ def remove_commas(a_string):
     return a_string.replace(",", "")
 
 def get_price(price_widget):
-    return float(remove_commas(re.match(r"^\$(.*)$", price_widget.text.strip()).group(1)))
+    return float(remove_commas(re.fullmatch(r"\$(.*)", price_widget.text.strip()).group(1)))
 
 def get_star_percentage(histogram_row):
-    return only(histogram_row.select(".a-text-right > .a-size-base")).text.strip()
+    return re.fullmatch("(.*)%", only(histogram_row.select(".a-text-right > .a-size-base")).text.strip()).group(1)
 
 class NotFiveRows(Exception):
     pass
@@ -46,6 +46,15 @@ class NoBuyBox(Exception):
 class UnrecognizedBuybox(Exception):
     pass
 
+FAKESPOT_RANKINGS = {
+    "A": 1,
+    "B": 2,
+    "C": 3,
+    "D": 4,
+    "F": 5,
+    "?": None
+}
+
 def parse_product_page(product_pages_folder, product_filename, product_type, product_page):
 
     average_rating = None
@@ -55,6 +64,31 @@ def parse_product_page(product_pages_folder, product_filename, product_type, pro
     three_star_percentage = None
     four_star_percentage = None
     five_star_percentage = None
+    hidden_prices = False
+    out_of_stock = False
+    undeliverable = False
+    price = None
+    unit_price = None
+    unit_text = ""
+    primary_delivery_date = ""
+    secondary_delivery_date = ""
+    ships_from = ""
+    sold_by = ""
+    fakespot_rank = None
+    category = ""
+    new_seller = False
+    climate_friendly = False
+    subscription_available = False
+    amazons_choice = False
+    free_returns = False
+    returnable = True
+    number_of_formats = 1
+    small_business = False
+    number_left_in_stock = None
+    ships_within = ""
+    release_date = None
+    more_on_the_way = False
+
 
     ratings_widgets = product_page.select("span.cr-widget-TitleRatingsHistogram")
     if len(ratings_widgets) > 0:
@@ -62,14 +96,14 @@ def parse_product_page(product_pages_folder, product_filename, product_type, pro
         average_ratings_widgets = ratings_widget.select("span[data-hook='rating-out-of-text']")
         if len(average_ratings_widgets) > 0:
             average_rating = float(
-                re.search(
-                    r"^(.*) out of 5$", only(average_ratings_widgets).text.strip()
+                re.fullmatch(
+                    r"(.*) out of 5", only(average_ratings_widgets).text.strip()
                 ).group(1)
             )
             number_of_ratings = int(
                 remove_commas(
-                    re.search(
-                        r"^(.*) global ratings?$",
+                    re.fullmatch(
+                        r"(.*) global ratings?",
                         only(
                             ratings_widget.select(
                                 "[data-hook='total-review-count']", 
@@ -104,11 +138,10 @@ def parse_product_page(product_pages_folder, product_filename, product_type, pro
     if len(hidden_price_widgets) > 0:
         only(hidden_price_widgets)
         hidden_prices = True
-    else:
-        hidden_prices = False
 
     accordion_rows = product_page.select("#buyBoxAccordion div[id*='AccordionRow']")
     if len(accordion_rows) > 0:
+        number_of_formats = len(accordion_rows)
         buybox = accordion_rows[0]
     else:
         buybox = only(product_page.select("div[data-csa-c-content-id='desktop_buybox_group_1']"))
@@ -117,20 +150,12 @@ def parse_product_page(product_pages_folder, product_filename, product_type, pro
     if len(out_of_stock_widgets) > 0:
         only(out_of_stock_widgets)
         out_of_stock = True
-    else:
-        out_of_stock = False
     
     undeliverable_widgets = buybox.select("div#exports_desktop_undeliverable_buybox") 
     if len(undeliverable_widgets) > 0:
         only(undeliverable_widgets)
         undeliverable = True
-    else:
-        undeliverable = False
-    
-    price = None
-    unit_price = None
-    unit_text = ""
-    
+
     offer_price_widgets = buybox.select("div.a-grid-center span.offer-price")
     if len(offer_price_widgets) > 0:
         price = get_price(only(offer_price_widgets))
@@ -157,74 +182,71 @@ def parse_product_page(product_pages_folder, product_filename, product_type, pro
     availability_widgets = buybox.select("div#availability")
     if len(availability_widgets) > 0:
         availability = only(availability_widgets).text.strip()
-    else:
-        availability = ""
+        left_in_stock_match = re.search(r"Only (.*) left in stock", availability)
+        if not(left_in_stock_match is None):
+            number_left_in_stock = int(remove_commas(left_in_stock_match.group(1)))
+        ships_within_match = re.search(r"Available to ship in (.*)", availability)
+        if not(ships_within_match is None):
+            ships_within = ships_within_match.group(1)
+        usually_ships_within_match = re.search(r"Usually ships within (.*)\.?", availability)
+        if not(usually_ships_within_match is None):
+            ships_within = usually_ships_within_match.group(1)
+        release_date_match = re.search(r"This title will be released on (.*)\.", availability)
+        if not(release_date_match is None):
+            release_date = release_date_match.group(1)
+        more_on_the_way_match = re.search(r"more on the way", availability)
+        if not(more_on_the_way_match is None):
+            more_on_the_way = True
+        out_of_stock_match = re.search(r"Temporarily out of stock", availability)
+        if not(out_of_stock_match is None):
+            out_of_stock = True
+        
 
     non_returnable_widgets = product_page.select("div#dsvReturnPolicyMessage_feature_div")
     if len(non_returnable_widgets) > 0:
-        returns = only(non_returnable_widgets).text.strip()
-    else:
-        returns_widgets = buybox.select("a#creturns-policy-anchor-text")
-        if len(returns_widgets) > 0:
-            returns = only(returns_widgets).text.strip()
-        else:
-            returns = ""
+        returnable = False
+    
+    returns_widgets = buybox.select("a#creturns-policy-anchor-text")
+    if len(returns_widgets) > 0:
+        free_returns = True
 
     primary_delivery_widgets = buybox.select("div#mir-layout-DELIVERY_BLOCK-slot-PRIMARY_DELIVERY_MESSAGE_LARGE span.a-text-bold")
     if len(primary_delivery_widgets):
         primary_delivery_date = only(primary_delivery_widgets).text.strip()
-    else:
-        primary_delivery_date = ""
 
     secondary_delivery_widgets = buybox.select("div#mir-layout-DELIVERY_BLOCK-slot-SECONDARY_DELIVERY_MESSAGE_LARGE span.a-text-bold")
     if len(secondary_delivery_widgets) > 0:
         secondary_delivery_date = only(secondary_delivery_widgets).text.strip()
-    else:
-        secondary_delivery_date = ""
 
     ships_from_widgets = buybox.select("div.tabular-buybox-text[tabular-attribute-name='Ships from']")
     if len(ships_from_widgets) > 0:
         ships_from = only(ships_from_widgets).text.strip()
-    else:
-        ships_from = ""
 
     sold_by_widgets = buybox.select("div.tabular-buybox-text[tabular-attribute-name='Sold by']")
     if len(sold_by_widgets) > 0:
         sold_by = only(sold_by_widgets).text.strip()
-    else:
-        sold_by = ""
 
     fakespot_widgets = product_page.select("div.fakespot-main-grade-box-wrapper")
     if len(fakespot_widgets) > 0:
-        fakespot_grade = only(product_page.select("div#fs-letter-grade-box")).text.strip()
-    else:
-        fakespot_grade = ""
+        fakespot_rank = FAKESPOT_RANKINGS[only(product_page.select("div#fs-letter-grade-box")).text.strip()]
 
     category_widgets = product_page.select("div#wayfinding-breadcrumbs_feature_div ul.a-unordered-list li:last-of-type")
     if len(category_widgets) > 0:
         category = only(category_widgets).text.strip()
-    else:
-        category = ""
 
     new_seller_widgets = product_page.select("div#fakespot-badge")
     if len(new_seller_widgets) > 0:
         only(new_seller_widgets)
         new_seller = True
-    else:
-        new_seller = False
 
     climate_friendly_widgets = product_page.select("div#climatePledgeFriendly")
     if len(climate_friendly_widgets) > 0:
         only(climate_friendly_widgets)
         climate_friendly = True
-    else:
-        climate_friendly = False
 
     subscription_widgets = product_page.select("div#snsAccordionRowMiddle")
     if len(subscription_widgets):
         subscription_available = True
-    else:
-        subscription_available = False
 
     choose_seller_widgets = product_page.select("a[title='See All Buying Options']")
     if len(choose_seller_widgets) > 0:
@@ -236,8 +258,11 @@ def parse_product_page(product_pages_folder, product_filename, product_type, pro
     if len(amazons_choice_widgets) > 0:
         only(amazons_choice_widgets)
         amazons_choice = True
-    else:
-        amazons_choice = False
+
+    small_business_widgets = product_page.select("div.provenance-certifications-row img[src='https://m.media-amazon.com/images/I/111mHoVK0kL._AC_UL34_SS42_.png']")
+    if len(small_business_widgets) > 0:
+        only(small_business_widgets)
+        small_business = True
 
     return DataFrame({
         "product_filename": product_filename,
@@ -250,8 +275,7 @@ def parse_product_page(product_pages_folder, product_filename, product_type, pro
         "five_star_percentage": five_star_percentage,
         "price": price,
         "unit_price": unit_price,
-        "fakespot_grade": fakespot_grade,
-        "returns": returns,
+        "fakespot_rank": fakespot_rank,
         "primary_delivery_date": primary_delivery_date,
         "secondary_delivery_date": secondary_delivery_date,
         "ships_from": ships_from,
@@ -263,11 +287,18 @@ def parse_product_page(product_pages_folder, product_filename, product_type, pro
         "out_of_stock": out_of_stock,
         "undeliverable": undeliverable,
         "hidden_prices": hidden_prices,
-        "availability": availability,
         "product_type": product_type,
-        "unit_text": unit_text
+        "unit_text": unit_text,
+        "amazons_choice": amazons_choice,
+        "free_returns": free_returns,
+        "returnable": returnable,
+        "number_of_formats": number_of_formats,
+        "small_business": small_business,
+        "number_left_in_stock": number_left_in_stock,
+        "ships_within": ships_within,
+        "release_date": release_date,
+        "more_on_the_way": more_on_the_way
     }, index = [0])
-        
 
 # product_id = "380"
 def parse_product_pages(product_pages_folder):
@@ -275,7 +306,7 @@ def parse_product_pages(product_pages_folder):
     for product_filename in get_filenames(product_pages_folder):
         print(product_filename)
         # all digits
-        if not(re.match(r"^.*\-sellers$", product_filename) is None):
+        if not(re.fullmatch(r".*\-sellers", product_filename) is None):
             continue
         
         product_page = read_html(path.join(product_pages_folder, product_filename + ".html"))
