@@ -55,7 +55,58 @@ FAKESPOT_RANKINGS = {
     "?": None
 }
 
-def parse_product_page(product_pages_folder, product_filename, product_type, product_page):
+def parse_main_box(main_box):
+    list_price = None
+    coupon_percent = None
+
+    list_price_widgets = main_box.select("span.a-price[data-a-strike='true'] span.a-offscreen")
+    if len(list_price_widgets) > 0:
+        list_price = get_price(only(list_price_widgets))
+    
+    coupon_widgets = main_box.select("label[id*='couponText']")
+    if len(coupon_widgets) > 0:
+        coupon_percent = float(re.fullmatch(r"Apply (.*)% coupon", only(coupon_widgets).text.strip()).group(1))
+
+    return (list_price, coupon_percent)
+
+# best_seller_widget = product_page.select("div#detailBulletsWrapper_feature_div a[href*='/gp/bestsellers/']")[0].parent.contents[2]
+# best_seller_widget = product_page.select("div#detailBulletsWrapper_feature_div a[href*='/gp/bestsellers/']")[1].parent
+def get_bestseller_rank(product_filename, best_seller_widget, index):
+    match = re.search(r"#([^\s]*)\s+in\s+([^\(]*)(?:\s+\()?", best_seller_widget.text.strip())
+    return DataFrame({
+        "order": index + 1,
+        "product_filename": product_filename,
+        "best_seller_rank": int(remove_commas(match.group(1))),
+        "best_seller_category": match.group(2).strip()
+    }, index = [0])
+
+# product_rows = []
+# best_seller_rows = []
+# category_rows = []
+# product_filename = "Fossil-Quartz-Stainless-Steel-ChronographdpB008AXYWHQrefsr_1_36keywordswatchesformenqid1682898442sr8-36"
+# product_page = read_html(path.join(product_pages_folder, product_filename + ".html"))
+def parse_product_page(product_rows, best_seller_rows, category_rows, product_pages_folder, product_filename):
+
+    product_page = read_html(path.join(product_pages_folder, product_filename + ".html"))
+
+    unsupported_browser_widgets = product_page.select("h2.heading.title")
+    if len(unsupported_browser_widgets) > 0:
+        if only(unsupported_browser_widgets).text.strip() != "Your browser is not supported":
+            raise NotUnsupported()
+        return
+
+    consider_alternative_widgets = product_page.select("div#percolate-ui-lpo_div")
+    if len(consider_alternative_widgets) > 0:
+        only(consider_alternative_widgets)
+        return
+    
+    product_type_widgets = product_page.select("div#dp")
+    if len(product_type_widgets) == 0:
+        return
+    
+    product_type = only(product_type_widgets)["class"][0]
+    if product_type == "book" or product_type == "ebooks" or product_type == "digitaltextfeeds" or product_type == "digital_software" or product_type == "device-type-desktop" or product_type == "audible" or product_type == "swa_physical":
+        return
 
     average_rating = None
     number_of_ratings = None
@@ -69,13 +120,12 @@ def parse_product_page(product_pages_folder, product_filename, product_type, pro
     undeliverable = False
     price = None
     unit_price = None
-    unit_text = ""
+    unit = ""
     primary_delivery_date = ""
     secondary_delivery_date = ""
     ships_from = ""
     sold_by = ""
     fakespot_rank = None
-    category = ""
     new_seller = False
     climate_friendly = False
     subscription_available = False
@@ -88,7 +138,10 @@ def parse_product_page(product_pages_folder, product_filename, product_type, pro
     ships_within = ""
     release_date = None
     more_on_the_way = False
-
+    list_price = None
+    number_of_answered_questions = None
+    more_than_a_thousand_answered_questions = False
+    coupon_percent = None
 
     ratings_widgets = product_page.select("span.cr-widget-TitleRatingsHistogram")
     if len(ratings_widgets) > 0:
@@ -133,6 +186,14 @@ def parse_product_page(product_pages_folder, product_filename, product_type, pro
             one_star_percentage = get_star_percentage(
                 histogram_rows[4]
             )
+    
+    main_boxes = product_page.select("div.offersConsistencyEnabled > div")
+    if len(main_boxes) > 0:
+        (list_price, coupon_percent) = parse_main_box(main_boxes[0])
+    else:
+        apex_boxes = product_page.select("div#apex_desktop")  
+        if len(apex_boxes) > 0:
+            (list_price, coupon_percent) = parse_main_box(only(apex_boxes))
 
     hidden_price_widgets = product_page.select("a[href='/forum/where%20is%20the%20price']")
     if len(hidden_price_widgets) > 0:
@@ -167,7 +228,6 @@ def parse_product_page(product_pages_folder, product_filename, product_type, pro
     price_pair_widgets = buybox.select("div#corePrice_feature_div")
     if len(price_pair_widgets) > 0:
         price_pair_widget = only(price_pair_widgets)
-        unit_text = price_pair_widget.text.strip()
         price_widgets = price_pair_widget.select("span.a-offscreen")
         if len(price_widgets) == 0:
             pass
@@ -176,6 +236,7 @@ def parse_product_page(product_pages_folder, product_filename, product_type, pro
         elif len(price_widgets) == 2:
             price = get_price(price_widgets[0])
             unit_price = get_price(price_widgets[0])
+            unit = re.search(r"\/(.*)\)", price_pair_widget.text.strip()).group(1).strip()
         else:
             raise NotOneOrTwoPrices()
 
@@ -200,6 +261,8 @@ def parse_product_page(product_pages_folder, product_filename, product_type, pro
         out_of_stock_match = re.search(r"Temporarily out of stock", availability)
         if not(out_of_stock_match is None):
             out_of_stock = True
+
+    
         
 
     non_returnable_widgets = product_page.select("div#dsvReturnPolicyMessage_feature_div")
@@ -230,9 +293,12 @@ def parse_product_page(product_pages_folder, product_filename, product_type, pro
     if len(fakespot_widgets) > 0:
         fakespot_rank = FAKESPOT_RANKINGS[only(product_page.select("div#fs-letter-grade-box")).text.strip()]
 
-    category_widgets = product_page.select("div#wayfinding-breadcrumbs_feature_div ul.a-unordered-list li:last-of-type")
-    if len(category_widgets) > 0:
-        category = only(category_widgets).text.strip()
+    for (index, category_widget) in enumerate(product_page.select("div#wayfinding-breadcrumbs_feature_div a")):
+        category_rows.append(DataFrame({
+            "order": index + 1,
+            "category": category_widget.text.strip(),
+            "product_filename": product_filename
+        }, index = [0]))
 
     new_seller_widgets = product_page.select("div#fakespot-badge")
     if len(new_seller_widgets) > 0:
@@ -264,7 +330,27 @@ def parse_product_page(product_pages_folder, product_filename, product_type, pro
         only(small_business_widgets)
         small_business = True
 
-    return DataFrame({
+    answered_questions_widgets = product_page.select("a#askATFLink")
+    if len(answered_questions_widgets) > 0:
+        answered_questions_text = re.fullmatch("(.*) answered questions?", only(answered_questions_widgets).text.strip()).group(1)
+        if answered_questions_text == "1000+":
+            more_than_a_thousand_answered_questions = True
+        else:
+            number_of_answered_questions = int(answered_questions_text)
+    
+
+    for (index, best_seller_link) in enumerate(product_page.select("div#prodDetails a[href*='/gp/bestsellers']")):
+        best_seller_rows.append(get_bestseller_rank(product_filename, best_seller_link.parent, index))
+
+    best_seller_bullets = product_page.select("div#detailBulletsWrapper_feature_div a[href*='/gp/bestsellers/']")
+
+    for (index, best_seller_link) in enumerate(best_seller_bullets):
+        if len(best_seller_bullets) > 1 and index == 0:
+            best_seller_rows.append(get_bestseller_rank(product_filename, best_seller_link.parent.contents[2], index))
+        else:
+            best_seller_rows.append(get_bestseller_rank(product_filename, best_seller_link.parent, index))
+        
+    product_rows.append(DataFrame({
         "product_filename": product_filename,
         "average_rating": average_rating,
         "number_of_ratings": number_of_ratings,
@@ -280,7 +366,6 @@ def parse_product_page(product_pages_folder, product_filename, product_type, pro
         "secondary_delivery_date": secondary_delivery_date,
         "ships_from": ships_from,
         "sold_by": sold_by,
-        "category": category,
         "new_seller": new_seller,
         "climate_friendly": climate_friendly,
         "subscription_available": subscription_available,
@@ -288,7 +373,7 @@ def parse_product_page(product_pages_folder, product_filename, product_type, pro
         "undeliverable": undeliverable,
         "hidden_prices": hidden_prices,
         "product_type": product_type,
-        "unit_text": unit_text,
+        "unit": unit,
         "amazons_choice": amazons_choice,
         "free_returns": free_returns,
         "returnable": returnable,
@@ -297,48 +382,28 @@ def parse_product_page(product_pages_folder, product_filename, product_type, pro
         "number_left_in_stock": number_left_in_stock,
         "ships_within": ships_within,
         "release_date": release_date,
-        "more_on_the_way": more_on_the_way
-    }, index = [0])
+        "more_on_the_way": more_on_the_way,
+        "list_price": list_price,
+        "number_of_answered_questions": number_of_answered_questions,
+        "more_than_a_thousand_answered_questions": more_than_a_thousand_answered_questions,
+        "coupon_percent": coupon_percent
+    }, index = [0]))
 
-# product_id = "380"
-def parse_product_pages(product_pages_folder):
+def parse_product_pages(product_pages_folder, product_results_file, best_seller_results_file, category_results_file, max_products = 10**6):
     product_rows = []
-    for product_filename in get_filenames(product_pages_folder):
+    best_seller_rows = []
+    category_rows = []
+    for (index, product_filename) in enumerate(get_filenames(product_pages_folder)):
+        if index >= max_products:
+            break
+
         print(product_filename)
         # all digits
         if not(re.fullmatch(r".*\-sellers", product_filename) is None):
             continue
         
-        product_page = read_html(path.join(product_pages_folder, product_filename + ".html"))
-
         try:
-            unsupported_browser_widgets = product_page.select("h2.heading.title")
-            if len(unsupported_browser_widgets) > 0:
-                if only(unsupported_browser_widgets).text.strip() != "Your browser is not supported":
-                    raise NotUnsupported()
-                continue
-
-            consider_alternative_widgets = product_page.select("div#percolate-ui-lpo_div")
-            if len(consider_alternative_widgets) > 0:
-                only(consider_alternative_widgets)
-                continue
-            
-            page_type_widgets = product_page.select("div#dp")
-            if len(page_type_widgets) == 0:
-                continue
-            
-            page_type = only(page_type_widgets)["class"][0]
-            if page_type == "book" or page_type == "ebooks" or page_type == "digitaltextfeeds" or page_type == "digital_software" or page_type == "device-type-desktop" or page_type == "audible" or page_type == "swa_physical":
-                continue
-            
-            product_rows.append(parse_product_page(product_pages_folder, product_filename, page_type, product_page))
-
-            # undeliverable_messages = product_page.select(
-            #     By.CSS_SELECTOR,
-            #     box_prefix
-            #     + "#exports_desktop_undeliverable_buybox_priceInsideBuybox_feature_div",
-            # )
-
+            parse_product_page(product_rows, best_seller_rows, category_rows, product_pages_folder, product_filename)
         except Exception as exception:
             webbrowser.open(path.join(product_pages_folder, product_filename + ".html"))
             sellers_file = path.join(product_pages_folder, product_filename + "-sellers.html")
@@ -611,4 +676,11 @@ def parse_product_pages(product_pages_folder):
             #         else:
             #             product_data[f"sub_category_{i}"] = None
 
-    return concat(product_rows, ignore_index=True)
+    concat(product_rows, ignore_index=True).to_csv(product_results_file, index = False)
+    concat(best_seller_rows, ignore_index=True).to_csv(best_seller_results_file, index = False)
+    concat(category_rows, ignore_index=True).to_csv(category_results_file, index = False)
+
+# TODO:
+# protection plans
+# number of variations
+# more categories

@@ -46,7 +46,13 @@ find_products(product_pages_folder, "a[title='See All Buying Options']")
 # audibleCash
 # audibleUpsell
 # deals
-parse_product_pages(product_pages_folder).to_csv(path.join("data", "product_results.csv"), index = False)
+parse_product_pages(
+    product_pages_folder,
+    path.join("data", "product_results.csv"),
+    path.join("data", "best_seller_results.csv"),
+    path.join("data", "category_results.csv"),
+    max_products = 10
+)
 
 
 # TODO:

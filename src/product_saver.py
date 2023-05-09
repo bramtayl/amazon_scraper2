@@ -63,7 +63,9 @@ JUNK_SELECTORS = [
     "#valuePick_feature_div",
     "#sims-themis-sponsored-products-2_feature_div",
     "#sponsoredProducts2_feature_div",
-    ".reviews-display-ad"
+    ".reviews-display-ad",
+    "div.fs-trusted-recos",
+    "div#HLCXComparisonWidgetNonTechnical_feature_div"
 ]
 
 
