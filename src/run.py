@@ -37,7 +37,7 @@ user_agent_index = save_product_pages(
 for browser in browser_box:
     browser.close()
 
-find_products(product_pages_folder, "a[title='See All Buying Options']")
+find_products(product_pages_folder, lambda product_page, sellers_page: len(product_page.select("div.a-grid-center span.offer-price")) > 0)
 
 # new
 # used
@@ -50,8 +50,7 @@ parse_product_pages(
     product_pages_folder,
     path.join("data", "product_results.csv"),
     path.join("data", "best_seller_results.csv"),
-    path.join("data", "category_results.csv"),
-    max_products = 10
+    path.join("data", "category_results.csv")
 )
 
 
