@@ -1,23 +1,55 @@
-from os import path
+from os import path, mkdir
 from pandas import read_csv
 from src.search_saver import save_search_pages
 from src.search_parser import parse_search_pages
 from src.product_saver import save_product_pages
 from src.product_parser import find_products, parse_product_pages
 
-search_pages_folder = path.join("data", "search_pages")
-search_results_file = path.join("data", "search_results.csv")
-product_pages_folder = path.join("data", "product_pages")
+inputs_folder = "inputs"
+queries_data = read_csv(path.join(inputs_folder, "queries.csv"))
+user_agents = read_csv(path.join(inputs_folder, "user_agents.csv")).loc[:, "user_agent"]
 
+results_folder = "results"
+if not path.isdir(results_folder):
+    mkdir(results_folder)
+
+searches_folder = path.join(results_folder, "searches")
+if not path.isdir(searches_folder):
+    mkdir(searches_folder)
+
+search_logs_folder = path.join(searches_folder, "logs")
+if not path.isdir(search_logs_folder):
+    mkdir(search_logs_folder)
+
+search_pages_folder = path.join(searches_folder, "pages")
+if not path.isdir(search_pages_folder):
+    mkdir(search_pages_folder)
+
+search_results_file = path.join(searches_folder, "searches.csv")
+
+products_folder = path.join(results_folder, "products")
+if not path.isdir(products_folder):
+    mkdir(products_folder)
+
+product_logs_folder = path.join(products_folder, "logs")
+if not path.isdir(product_logs_folder):
+    mkdir(product_logs_folder)
+
+product_pages_folder = path.join(products_folder, "product_pages")
+if not path.isdir(product_pages_folder):
+    mkdir(product_pages_folder)
+
+product_results_file = path.join(products_folder, "products.csv")
+best_seller_results_file = path.join(products_folder, "best_sellers.csv")
+category_results_file = path.join(products_folder, "categories.csv")
 
 browser_box = []
-user_agents = read_csv(path.join("data", "user_agents.csv")).loc[:, "user_agent"]
 user_agent_index = 0
 
 user_agent_index = save_search_pages(
     browser_box,
-    read_csv(path.join("data", "queries.csv")),
-    path.join("data", "search_logs"),
+    read_csv(path.join("inputs", "queries.csv")),
+    path.join("results", "search_logs"),
     search_pages_folder,
     user_agents,
     user_agent_index=user_agent_index,
@@ -27,8 +59,8 @@ parse_search_pages(search_pages_folder).to_csv(search_results_file, index = Fals
 
 user_agent_index = save_product_pages(
     browser_box,
-    set(read_csv(search_results_file).loc[:, "product_url"]),
-    path.join("data", "product_logs"),
+    queries_data,
+    product_logs_folder,
     product_pages_folder,
     user_agents,
     user_agent_index=user_agent_index,

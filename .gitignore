@@ -1,13 +1,3 @@
 geckodriver.log
 __pycache__
-/result.csv
-/data/*
-/data/search_pages/*
-/data/search_results/*
-/data/product_logs/*
-/data/product_pages/*
-/data/product_results/*
-/data/search_results.csv
-/data/product_results.csv
-/data/best_seller_results.csv
-/data/category_results.csv
+/results/*
