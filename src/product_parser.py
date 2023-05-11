@@ -4,13 +4,20 @@ import re
 from src.utilities import get_filenames, only, read_html
 import webbrowser
 
-def find_products(product_pages_folder, selector, number_of_products = 5):
+def find_products(product_pages_folder, a_function, number_of_products = 5):
     found = 0
     for product_filename in get_filenames(product_pages_folder):
         product_file = path.join(product_pages_folder, product_filename + ".html")
         product_page = read_html(product_file)
-        if len(product_page.select(selector)) > 0:
+        sellers_file = path.join(product_pages_folder, product_filename + "-sellers.html")
+        if path.isfile(sellers_file):
+            sellers_page = read_html(sellers_file)
+        else:
+            sellers_page = None
+        if a_function(product_page, sellers_page):
             webbrowser.open(product_file)
+            if not sellers_page is None:
+                webbrowser.open(sellers_file)
             found = found + 1
             if found == number_of_products:
                 break
@@ -63,9 +70,7 @@ def parse_main_box(main_box):
     if len(list_price_widgets) > 0:
         list_price = get_price(only(list_price_widgets))
     
-    coupon_widgets = main_box.select("label[id*='couponText']")
-    if len(coupon_widgets) > 0:
-        coupon_percent = float(re.fullmatch(r"Apply (.*)% coupon", only(coupon_widgets).text.strip()).group(1))
+    
 
     return (list_price, coupon_percent)
 
@@ -87,7 +92,9 @@ def get_bestseller_rank(product_filename, best_seller_widget, index):
 # product_page = read_html(path.join(product_pages_folder, product_filename + ".html"))
 def parse_product_page(product_rows, best_seller_rows, category_rows, product_pages_folder, product_filename):
 
-    product_page = read_html(path.join(product_pages_folder, product_filename + ".html"))
+    product_file = path.join(product_pages_folder, product_filename + ".html")
+
+    product_page = read_html(product_file)
 
     unsupported_browser_widgets = product_page.select("h2.heading.title")
     if len(unsupported_browser_widgets) > 0:
@@ -106,6 +113,15 @@ def parse_product_page(product_rows, best_seller_rows, category_rows, product_pa
     
     product_type = only(product_type_widgets)["class"][0]
     if product_type == "book" or product_type == "ebooks" or product_type == "digitaltextfeeds" or product_type == "digital_software" or product_type == "device-type-desktop" or product_type == "audible" or product_type == "swa_physical":
+        return
+    
+    used_only_widgets = product_page.select("div#usedOnlyBuybox")
+    if len(used_only_widgets) > 0:
+        only(used_only_widgets)
+        return
+    
+    refurbished_options = product_page.select("div#buyBoxAccordion > div[id*='renewed']")
+    if len(refurbished_options) > 0:
         return
 
     average_rating = None
@@ -141,7 +157,9 @@ def parse_product_page(product_rows, best_seller_rows, category_rows, product_pa
     list_price = None
     number_of_answered_questions = None
     more_than_a_thousand_answered_questions = False
-    coupon_percent = None
+    number_of_sellers = 1
+    returns_text = ""
+    coupon_text = ""
 
     ratings_widgets = product_page.select("span.cr-widget-TitleRatingsHistogram")
     if len(ratings_widgets) > 0:
@@ -186,21 +204,38 @@ def parse_product_page(product_rows, best_seller_rows, category_rows, product_pa
             one_star_percentage = get_star_percentage(
                 histogram_rows[4]
             )
-    
-    main_boxes = product_page.select("div.offersConsistencyEnabled > div")
-    if len(main_boxes) > 0:
-        (list_price, coupon_percent) = parse_main_box(main_boxes[0])
-    else:
-        apex_boxes = product_page.select("div#apex_desktop")  
-        if len(apex_boxes) > 0:
-            (list_price, coupon_percent) = parse_main_box(only(apex_boxes))
+
+    promo_widget_containers = product_page.select("#promoPriceBlockMessage_feature_div")
+    if len(promo_widget_containers) > 0:
+        promo_widget_container = only(promo_widget_containers)
+        promo_widgets = promo_widget_container.select("div.offersConsistencyEnabled > div[style='']")
+        if len(promo_widgets) > 0:
+            promo_widget = promo_widgets[0]
+        else:
+            promo_widget = promo_widget_container
+
+        coupon_widgets = promo_widget.select("label[id*='couponText']")
+        if len(coupon_widgets) > 0:
+            coupon_text = only(coupon_widgets).text.strip()
+
+    center_priceboxes_containers = product_page.select("div#apex_desktop")
+    if len(center_priceboxes_containers) > 0:
+        center_priceboxes_container = only(center_priceboxes_containers)
+        center_priceboxes = center_priceboxes_container.select("div.offersConsistencyEnabled > div[style='']")
+        if len(center_priceboxes) > 0:
+            center_pricebox = center_priceboxes[0]
+        else:
+            center_pricebox = center_priceboxes_container
+        list_price_widgets = center_pricebox.select("span.a-price[data-a-strike='true'] span.a-offscreen")
+        if len(list_price_widgets) > 0:
+            list_price = get_price(only(list_price_widgets))
 
     hidden_price_widgets = product_page.select("a[href='/forum/where%20is%20the%20price']")
     if len(hidden_price_widgets) > 0:
         only(hidden_price_widgets)
         hidden_prices = True
 
-    accordion_rows = product_page.select("#buyBoxAccordion div[id*='AccordionRow']")
+    accordion_rows = product_page.select("#buyBoxAccordion > div[id*='AccordionRow']")
     if len(accordion_rows) > 0:
         number_of_formats = len(accordion_rows)
         buybox = accordion_rows[0]
@@ -216,14 +251,6 @@ def parse_product_page(product_rows, best_seller_rows, category_rows, product_pa
     if len(undeliverable_widgets) > 0:
         only(undeliverable_widgets)
         undeliverable = True
-
-    offer_price_widgets = buybox.select("div.a-grid-center span.offer-price")
-    if len(offer_price_widgets) > 0:
-        price = get_price(only(offer_price_widgets))
-
-    renewed_price_widgets = buybox.select("span#renewedBuyBoxPrice")
-    if len(renewed_price_widgets) > 0:
-        price = get_price(only(renewed_price_widgets))
 
     price_pair_widgets = buybox.select("div#corePrice_feature_div")
     if len(price_pair_widgets) > 0:
@@ -262,9 +289,6 @@ def parse_product_page(product_rows, best_seller_rows, category_rows, product_pa
         if not(out_of_stock_match is None):
             out_of_stock = True
 
-    
-        
-
     non_returnable_widgets = product_page.select("div#dsvReturnPolicyMessage_feature_div")
     if len(non_returnable_widgets) > 0:
         returnable = False
@@ -272,6 +296,10 @@ def parse_product_page(product_rows, best_seller_rows, category_rows, product_pa
     returns_widgets = buybox.select("a#creturns-policy-anchor-text")
     if len(returns_widgets) > 0:
         free_returns = True
+
+    returns_text_widgets = buybox.select("div.tabular-buybox-text[tabular-attribute-name='Returns'] span.tabular-buybox-text-message")
+    if len(returns_text_widgets):
+        returns_text = only(returns_text_widgets).text
 
     primary_delivery_widgets = buybox.select("div#mir-layout-DELIVERY_BLOCK-slot-PRIMARY_DELIVERY_MESSAGE_LARGE span.a-text-bold")
     if len(primary_delivery_widgets):
@@ -318,7 +346,13 @@ def parse_product_page(product_rows, best_seller_rows, category_rows, product_pa
     if len(choose_seller_widgets) > 0:
         only(choose_seller_widgets)
         sellers_page = read_html(path.join(product_pages_folder, product_filename + "-sellers.html"))
-        # TODO: all the stuff here
+        sellers = sellers_page.select("div#aod-offer")
+        number_of_sellers = len(sellers)
+        first_seller = sellers[0]
+        price_widgets = first_seller.select("div#aod-price-1 span.a-price span.a-offscreen")
+        if len(price_widgets) > 0:
+            price = get_price(only(price_widgets))
+        # TODO: more
 
     amazons_choice_widgets = product_page.select("acBadge_feature_div")
     if len(amazons_choice_widgets) > 0:
@@ -386,7 +420,9 @@ def parse_product_page(product_rows, best_seller_rows, category_rows, product_pa
         "list_price": list_price,
         "number_of_answered_questions": number_of_answered_questions,
         "more_than_a_thousand_answered_questions": more_than_a_thousand_answered_questions,
-        "coupon_percent": coupon_percent
+        "coupon_text": coupon_text,
+        "number_of_sellers": number_of_sellers,
+        "returns_text": returns_text
     }, index = [0]))
 
 def parse_product_pages(product_pages_folder, product_results_file, best_seller_results_file, category_results_file, max_products = 10**6):
