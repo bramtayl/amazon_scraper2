@@ -27,9 +27,11 @@ class FoiledAgainError(Exception):
 class GoneError(Exception):
     pass
 
+
 # custom error if amazon tells us something "went wrong"
 class WentWrongError(Exception):
     pass
+
 
 # custom error if there is not exactly one in a list
 class NotExactlyOneError(Exception):
@@ -77,6 +79,7 @@ def sorted_dataframe(dictionary):
     the_keys.sort()
     sorted_dict = {key: dictionary[key] for key in the_keys}
     return DataFrame(sorted_dict, index=[0])
+
 
 # combine all the csvs in a folder into a dataframe
 def combine_folder_csvs(folder):
@@ -155,11 +158,12 @@ def wait_for_amazon(browser):
             raise WentWrongError()
 
         raise an_error
-    
+
 
 def read_html(file):
     with open(file, "r") as file:
         return BeautifulSoup(file, "lxml")
+
 
 # stole from https://github.com/django/django/blob/main/django/utils/text.py
 def get_valid_filename(name):

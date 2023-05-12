@@ -3,7 +3,7 @@ from pandas import read_csv
 from src.search_saver import save_search_pages
 from src.search_parser import parse_search_pages
 from src.product_saver import save_product_pages
-from src.product_parser import find_products, parse_product_pages
+from src.product_parser import parse_product_pages
 
 inputs_folder = "inputs"
 queries_data = read_csv(path.join(inputs_folder, "queries.csv"))
@@ -55,7 +55,7 @@ user_agent_index = save_search_pages(
     user_agent_index=user_agent_index,
 )
 
-parse_search_pages(search_pages_folder).to_csv(search_results_file, index = False)
+parse_search_pages(search_pages_folder).to_csv(search_results_file, index=False)
 
 user_agent_index = save_product_pages(
     browser_box,
@@ -69,8 +69,6 @@ user_agent_index = save_product_pages(
 for browser in browser_box:
     browser.close()
 
-find_products(product_pages_folder, lambda product_page: len(product_page.select("div#mir-layout-DELIVERY_BLOCK-slot-PRIMARY_DELIVERY_MESSAGE_LARGE a.a-link_normal")) > 0)
-
 # new
 # used
 # sns
@@ -82,7 +80,7 @@ parse_product_pages(
     product_pages_folder,
     product_results_file,
     best_seller_results_file,
-    category_results_file
+    category_results_file,
 )
 
 

@@ -19,15 +19,18 @@ from src.utilities import (
     WAIT_TIME,
 )
 
+
 # sets of choices that one can choose from
 def get_choice_sets(browser):
     return browser.find_elements(
         By.CSS_SELECTOR, "#twister-plus-inline-twister > div.inline-twister-row"
     )
 
+
 # if buy box hasn't fully loaded because its waiting for users to make a choice
 def has_partial_buyboxes(browser):
     return len(browser.find_elements(By.CSS_SELECTOR, "#partialStateBuybox")) > 0
+
 
 JUNK_SELECTORS = [
     "map",
@@ -65,7 +68,7 @@ JUNK_SELECTORS = [
     "#sponsoredProducts2_feature_div",
     ".reviews-display-ad",
     "div.fs-trusted-recos",
-    "div#HLCXComparisonWidgetNonTechnical_feature_div"
+    "div#HLCXComparisonWidgetNonTechnical_feature_div",
 ]
 
 
@@ -82,10 +85,10 @@ def save_product_page(
         browser.get("https://www.amazon.com" + product_url)
 
     product_filename = get_valid_filename(product_url)
-    
-    DataFrame({"product_url": product_url, "datetime": datetime.now()}, index = [0]).to_csv(
-        path.join(product_logs_folder, product_filename + ".csv"), index=False
-    )
+
+    DataFrame(
+        {"product_url": product_url, "datetime": datetime.now()}, index=[0]
+    ).to_csv(path.join(product_logs_folder, product_filename + ".csv"), index=False)
 
     wait_for_amazon(browser)
     try:
@@ -134,7 +137,9 @@ def save_product_page(
         )
 
     save_page(
-        browser, JUNK_SELECTORS, path.join(product_pages_folder, product_filename + ".html")
+        browser,
+        JUNK_SELECTORS,
+        path.join(product_pages_folder, product_filename + ".html"),
     )
     print(product_filename)
 
@@ -157,6 +162,7 @@ def save_product_page(
             JUNK_SELECTORS,
             path.join(product_pages_folder, product_filename + "-sellers.html"),
         )
+
 
 def save_product_pages(
     browser_box,
