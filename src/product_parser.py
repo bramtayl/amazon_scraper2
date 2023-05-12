@@ -20,8 +20,8 @@ def find_products(product_pages_folder, a_function, number_of_products = 5):
 def remove_commas(a_string):
     return a_string.replace(",", "")
 
-def get_price(price_widget):
-    return float(remove_commas(re.fullmatch(r"\$(.*)", price_widget.text.strip()).group(1)))
+def get_price(price_text):
+    return float(remove_commas(re.fullmatch(r"\$(.*)", price_text).group(1)))
 
 def get_star_percentage(histogram_row):
     return re.fullmatch("(.*)%", only(histogram_row.select(".a-text-right > .a-size-base")).text.strip()).group(1)
@@ -82,7 +82,7 @@ def parse_date(date_text, current_year):
     if not single_day_match is None:
         return date(current_year, MONTH_NUMBERS[single_day_match.group(1)], int(single_day_match.group(2))), None
     
-    raise UnrecognizedDate()
+    raise UnrecognizedDate(date_text)
 
 def parse_main_box(main_box):
     list_price = None
@@ -90,7 +90,7 @@ def parse_main_box(main_box):
 
     list_price_widgets = main_box.select("span.a-price[data-a-strike='true'] span.a-offscreen")
     if len(list_price_widgets) > 0:
-        list_price = get_price(only(list_price_widgets))
+        list_price = get_price(only(list_price_widgets).text.strip())
     
     
 
@@ -110,7 +110,7 @@ def get_bestseller_rank(product_filename, best_seller_widget, index):
 # product_rows = []
 # best_seller_rows = []
 # category_rows = []
-# product_filename = "Boogie-Wipes-Gentle-Saline-OriginaldpB001PN82LArefsr_1_27keywordsbabywetwipesqid1682898729sbaby-productssr1-27"
+# product_filename = "Fire-HD-Case-Kids-2021dpB095SWHXTFrefsr_1_2keywordsfirehd10tabletcaseqid1682898353sr8-2"
 # product_page = read_html(path.join(product_pages_folder, product_filename + ".html"))
 def parse_product_page(product_rows, best_seller_rows, category_rows, product_pages_folder, product_filename, current_year = 2023):
 
@@ -163,8 +163,8 @@ def parse_product_page(product_rows, best_seller_rows, category_rows, product_pa
     primary_delivery_end_date = None
     secondary_delivery_start_date = None
     secondary_delivery_end_date = None
-    ships_from = ""
-    sold_by = ""
+    ships_from_amazon = False
+    sold_by_amazon = None
     fakespot_rank = None
     new_seller = False
     climate_friendly = False
@@ -179,11 +179,12 @@ def parse_product_page(product_rows, best_seller_rows, category_rows, product_pa
     list_price = None
     number_of_answered_questions = None
     more_than_a_thousand_answered_questions = False
-    primary_shipping_cost = None
     free_prime_shipping = False
     coupon_percent = None
     subscribe_coupon_percent = None
     return_until_days = None
+    conditional_shipping = False
+    primary_shipping_cost = None
 
     ratings_widgets = product_page.select("span.cr-widget-TitleRatingsHistogram")
     if len(ratings_widgets) > 0:
@@ -258,7 +259,7 @@ def parse_product_page(product_rows, best_seller_rows, category_rows, product_pa
             center_pricebox = center_priceboxes_container
         list_price_widgets = center_pricebox.select("span.a-price[data-a-strike='true'] span.a-offscreen")
         if len(list_price_widgets) > 0:
-            list_price = get_price(only(list_price_widgets))
+            list_price = get_price(only(list_price_widgets).text.strip())
 
     hidden_price_widgets = product_page.select("a[href='/forum/where%20is%20the%20price']")
     if len(hidden_price_widgets) > 0:
@@ -289,25 +290,23 @@ def parse_product_page(product_rows, best_seller_rows, category_rows, product_pa
         if len(price_widgets) == 0:
             pass
         elif len(price_widgets) == 1:
-            price = get_price(price_widgets[0])
+            price = get_price(price_widgets[0].text.strip())
         elif len(price_widgets) == 2:
-            price = get_price(price_widgets[0])
-            unit_price = get_price(price_widgets[0])
+            price = get_price(price_widgets[0].text.strip())
+            unit_price = get_price(price_widgets[0].text.strip())
             unit = re.search(r"\/(.*)\)", price_pair_widget.text.strip()).group(1).strip()
         else:
             raise NotOneOrTwoPrices()
         
-    shipping_message_widgets = buybox.select("#price-shipping-message")
-    if len(shipping_message_widgets) > 0:
-        shipping_message = only(shipping_message_widgets).text.strip()
-        if shipping_message != "":
-            if re.search("Get Fast, Free Shipping with Amazon Prime", shipping_message) is None:
-                raise NotFreePrime()
+    prime_promotion_widgets = buybox.select("#price-shipping-message")
+    if len(prime_promotion_widgets) > 0:
+        shipping_message = only(prime_promotion_widgets).text.strip()
+        if shipping_message == "Get Fast, Free Shipping with Amazon Prime":
             free_prime_shipping = True
 
-    shipping_message_widgets = buybox.select("#desktop_qualifiedBuyBox #amazonGlobal_feature_div > .a-color-secondary")
-    if len(shipping_message_widgets) > 0:
-        primary_shipping_cost = re.search(r"\$(.*) Shipping", only(shipping_message_widgets).text).group(1)
+    import_widgets = buybox.select("#desktop_qualifiedBuyBox #amazonGlobal_feature_div > .a-color-secondary")
+    if len(import_widgets) > 0:
+        primary_shipping_cost = re.search(r"\$(.*) Shipping", only(import_widgets).text).group(1)
 
     availability_widgets = buybox.select("div#availability")
     if len(availability_widgets) > 0:
@@ -336,29 +335,35 @@ def parse_product_page(product_rows, best_seller_rows, category_rows, product_pa
         if not return_timeline_match is None:
             return_until_days = int(return_timeline_match.group(1))
     
-    primary_delivery_widgets = buybox.select("div#mir-layout-DELIVERY_BLOCK-slot-PRIMARY_DELIVERY_MESSAGE_LARGE")
-    if len(primary_delivery_widgets):
+    primary_delivery_widgets = buybox.select("div#mir-layout-DELIVERY_BLOCK-slot-PRIMARY_DELIVERY_MESSAGE_LARGE > span[data-csa-c-content-id*='DEXUnified']")
+    if len(primary_delivery_widgets) > 0:
         primary_delivery_widget = only(primary_delivery_widgets)
-        primary_delivery_date_widgets = primary_delivery_widget.select("span.a-text-bold")
-        if len(primary_delivery_date_widgets) > 0:
-            primary_delivery_start_date, primary_delivery_end_date = parse_date(only(primary_delivery_date_widgets).text.strip(), current_year)
-        primary_shipping_cost_widgets = primary_delivery_widget.select("a.a-link_normal")
-        if len(primary_shipping_cost_widgets) > 0:
-            if only(primary_shipping_cost_widgets).text.strip() != "FREE delivery":
-                raise NotFreeDelivery()
-            primary_shipping_cost = 0
+        primary_shipping_text = primary_delivery_widget.text.strip()
+        primary_shipping_cost_match = re.search("([^ ]*).*delivery", primary_shipping_text)
+        if not primary_shipping_cost_match is None:
+            primary_shipping_cost_text = primary_shipping_cost_match.group(1)
+            if primary_shipping_cost_text == "FREE":
+                primary_shipping_cost = 0
+            else:
+                primary_shipping_cost = get_price(primary_shipping_cost_text)
+        
+        if not re.search(r"on orders shipped by Amazon over", primary_shipping_text):
+            conditional_shipping = True
+        
+        primary_delivery_start_date, primary_delivery_end_date = parse_date(primary_delivery_widget["data-csa-c-delivery-time"], current_year)
 
-    secondary_delivery_widgets = buybox.select("div#mir-layout-DELIVERY_BLOCK-slot-SECONDARY_DELIVERY_MESSAGE_LARGE span.a-text-bold")
+    secondary_delivery_widgets = buybox.select("div#mir-layout-DELIVERY_BLOCK-slot-SECONDARY_DELIVERY_MESSAGE_LARGE > span[data-csa-c-content-id*='DEXUnified']")
     if len(secondary_delivery_widgets) > 0:
-        secondary_delivery_start_date, secondary_delivery_end_date = parse_date(only(secondary_delivery_widgets).text.strip(), current_year)
+        secondary_delivery_widget = only(secondary_delivery_widgets)
+        secondary_delivery_start_date, secondary_delivery_end_date = parse_date(secondary_delivery_widget["data-csa-c-delivery-time"], current_year)
 
     ships_from_widgets = buybox.select("div.tabular-buybox-text[tabular-attribute-name='Ships from']")
     if len(ships_from_widgets) > 0:
-        ships_from = only(ships_from_widgets).text.strip()
+        ships_from_amazon = not re.search(r"Amazon", only(ships_from_widgets).text.strip()) is None
 
     sold_by_widgets = buybox.select("div.tabular-buybox-text[tabular-attribute-name='Sold by']")
     if len(sold_by_widgets) > 0:
-        sold_by = only(sold_by_widgets).text.strip()
+        sold_by_amazon = not re.search(r"Amazon", only(sold_by_widgets).text.strip()) is None
 
     fakespot_widgets = product_page.select("div.fakespot-main-grade-box-wrapper")
     if len(fakespot_widgets) > 0:
@@ -427,8 +432,8 @@ def parse_product_page(product_rows, best_seller_rows, category_rows, product_pa
         "price": price,
         "unit_price": unit_price,
         "fakespot_rank": fakespot_rank,
-        "ships_from": ships_from,
-        "sold_by": sold_by,
+        "ships_from_amazon": None,
+        "sold_by_amazon": sold_by_amazon,
         "new_seller": new_seller,
         "climate_friendly": climate_friendly,
         "subscription_available": subscription_available,
@@ -447,16 +452,16 @@ def parse_product_page(product_rows, best_seller_rows, category_rows, product_pa
         "list_price": list_price,
         "number_of_answered_questions": number_of_answered_questions,
         "more_than_a_thousand_answered_questions": more_than_a_thousand_answered_questions,
-        "primary_shipping_cost": primary_shipping_cost,
         "return_until_days": return_until_days,
         "coupon_percent": coupon_percent,
         "subscribe_coupon_percent": subscribe_coupon_percent,
         "free_prime_shipping": free_prime_shipping,
-        "shipping_cost": None,
         "primary_delivery_start_date": primary_delivery_start_date,
         "primary_delivery_end_date": primary_delivery_end_date,
         "secondary_delivery_start_date": secondary_delivery_start_date,
-        "secondary_delivery_end_date": secondary_delivery_end_date
+        "secondary_delivery_end_date": secondary_delivery_end_date,
+        "conditional_shipping": conditional_shipping,
+        "primary_shipping_cost": primary_shipping_cost
     }, index = [0]))
 
 def parse_product_pages(product_pages_folder, product_results_file, best_seller_results_file, category_results_file, max_products = 10**6):

@@ -69,7 +69,7 @@ user_agent_index = save_product_pages(
 for browser in browser_box:
     browser.close()
 
-find_products(product_pages_folder, lambda product_page, sellers_page: len(product_page.select("#desktop_qualifiedBuyBox #amazonGlobal_feature_div > .a-color-secondary")) > 0)
+find_products(product_pages_folder, lambda product_page: len(product_page.select("div#mir-layout-DELIVERY_BLOCK-slot-PRIMARY_DELIVERY_MESSAGE_LARGE a.a-link_normal")) > 0)
 
 # new
 # used
