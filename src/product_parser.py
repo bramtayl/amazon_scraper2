@@ -3,21 +3,15 @@ from pandas import concat, DataFrame
 import re
 from src.utilities import get_filenames, only, read_html
 import webbrowser
+from datetime import date
 
 def find_products(product_pages_folder, a_function, number_of_products = 5):
     found = 0
     for product_filename in get_filenames(product_pages_folder):
         product_file = path.join(product_pages_folder, product_filename + ".html")
         product_page = read_html(product_file)
-        sellers_file = path.join(product_pages_folder, product_filename + "-sellers.html")
-        if path.isfile(sellers_file):
-            sellers_page = read_html(sellers_file)
-        else:
-            sellers_page = None
-        if a_function(product_page, sellers_page):
+        if a_function(product_page):
             webbrowser.open(product_file)
-            if not sellers_page is None:
-                webbrowser.open(sellers_file)
             found = found + 1
             if found == number_of_products:
                 break
@@ -35,22 +29,19 @@ def get_star_percentage(histogram_row):
 class NotFiveRows(Exception):
     pass
 
-class NotNoReviews(Exception):
-    pass
-
 class NotUnsupported(Exception):
-    pass
-
-class NotReviewSummary(Exception):
     pass
 
 class NotOneOrTwoPrices(Exception):
     pass
 
-class NoBuyBox(Exception):
+class NotFreePrime(Exception):
     pass
 
-class UnrecognizedBuybox(Exception):
+class NotFreeDelivery(Exception):
+    pass
+
+class UnrecognizedDate(Exception):
     pass
 
 FAKESPOT_RANKINGS = {
@@ -61,6 +52,37 @@ FAKESPOT_RANKINGS = {
     "F": 5,
     "?": None
 }
+
+MONTH_NUMBERS = {
+    "January": 1,
+    "February": 2,
+    "March": 3,
+    "April": 4,
+    "May": 5,
+    "June": 6,
+    "July": 7,
+    "August": 8,
+    "September": 9,
+    "October": 10,
+    "November": 11,
+    "December": 12
+}
+
+def parse_date(date_text, current_year):
+    multi_month_match = re.search(r"(\w+) (\d+) \- (\w+) (\d+)", date_text)
+    if not multi_month_match is None:
+        return date(current_year, MONTH_NUMBERS[multi_month_match.group(1)], int(multi_month_match.group(2))), date(current_year, MONTH_NUMBERS[multi_month_match.group(3)], int(multi_month_match.group(4)))
+    
+    single_month_match = re.search(r"(\w+) (\d+) \- (\d+)", date_text)
+    if not single_month_match is None:
+        month_number = MONTH_NUMBERS[single_month_match.group(1)]
+        return date(current_year, month_number, int(single_month_match.group(2))), date(current_year, month_number, int(single_month_match.group(3)))
+    
+    single_day_match = re.search(r"(\w+) (\d+)", date_text)
+    if not single_day_match is None:
+        return date(current_year, MONTH_NUMBERS[single_day_match.group(1)], int(single_day_match.group(2))), None
+    
+    raise UnrecognizedDate()
 
 def parse_main_box(main_box):
     list_price = None
@@ -90,7 +112,7 @@ def get_bestseller_rank(product_filename, best_seller_widget, index):
 # category_rows = []
 # product_filename = "Boogie-Wipes-Gentle-Saline-OriginaldpB001PN82LArefsr_1_27keywordsbabywetwipesqid1682898729sbaby-productssr1-27"
 # product_page = read_html(path.join(product_pages_folder, product_filename + ".html"))
-def parse_product_page(product_rows, best_seller_rows, category_rows, product_pages_folder, product_filename):
+def parse_product_page(product_rows, best_seller_rows, category_rows, product_pages_folder, product_filename, current_year = 2023):
 
     product_file = path.join(product_pages_folder, product_filename + ".html")
 
@@ -137,8 +159,10 @@ def parse_product_page(product_rows, best_seller_rows, category_rows, product_pa
     price = None
     unit_price = None
     unit = ""
-    primary_delivery_date = ""
-    secondary_delivery_date = ""
+    primary_delivery_start_date = None
+    primary_delivery_end_date = None
+    secondary_delivery_start_date = None
+    secondary_delivery_end_date = None
     ships_from = ""
     sold_by = ""
     fakespot_rank = None
@@ -151,21 +175,15 @@ def parse_product_page(product_rows, best_seller_rows, category_rows, product_pa
     number_of_formats = 1
     small_business = False
     number_left_in_stock = None
-    ships_within = ""
-    release_date = None
     more_on_the_way = False
     list_price = None
     number_of_answered_questions = None
     more_than_a_thousand_answered_questions = False
-    returns_text = ""
-    coupon_text = ""
-    condition = ""
-    number_of_sellers_text = ""
-    seller_average_rating = None
-    seller_number_of_ratings_text = ""
-    unit_price_text = ""
-    primary_delivery_cost = None
-    secondary_delivery_cost = None
+    primary_shipping_cost = None
+    free_prime_shipping = False
+    coupon_percent = None
+    subscribe_coupon_percent = None
+    return_until_days = None
 
     ratings_widgets = product_page.select("span.cr-widget-TitleRatingsHistogram")
     if len(ratings_widgets) > 0:
@@ -223,6 +241,12 @@ def parse_product_page(product_rows, best_seller_rows, category_rows, product_pa
         coupon_widgets = promo_widget.select("label[id*='couponText']")
         if len(coupon_widgets) > 0:
             coupon_text = only(coupon_widgets).text.strip()
+            coupon_match = re.search(r"Apply (.*)% coupon", coupon_text)
+            if not coupon_match is None:
+                coupon_percent = int(coupon_match.group(1))
+            subscribe_coupon_match = re.search(r"Save (.*)%.*Subscribe & Save", coupon_text)
+            if not subscribe_coupon_match is None:
+                subscribe_coupon_percent = int(subscribe_coupon_match.group(1))
 
     center_priceboxes_containers = product_page.select("div#apex_desktop")
     if len(center_priceboxes_containers) > 0:
@@ -272,6 +296,18 @@ def parse_product_page(product_rows, best_seller_rows, category_rows, product_pa
             unit = re.search(r"\/(.*)\)", price_pair_widget.text.strip()).group(1).strip()
         else:
             raise NotOneOrTwoPrices()
+        
+    shipping_message_widgets = buybox.select("#price-shipping-message")
+    if len(shipping_message_widgets) > 0:
+        shipping_message = only(shipping_message_widgets).text.strip()
+        if shipping_message != "":
+            if re.search("Get Fast, Free Shipping with Amazon Prime", shipping_message) is None:
+                raise NotFreePrime()
+            free_prime_shipping = True
+
+    shipping_message_widgets = buybox.select("#desktop_qualifiedBuyBox #amazonGlobal_feature_div > .a-color-secondary")
+    if len(shipping_message_widgets) > 0:
+        primary_shipping_cost = re.search(r"\$(.*) Shipping", only(shipping_message_widgets).text).group(1)
 
     availability_widgets = buybox.select("div#availability")
     if len(availability_widgets) > 0:
@@ -279,15 +315,6 @@ def parse_product_page(product_rows, best_seller_rows, category_rows, product_pa
         left_in_stock_match = re.search(r"Only (.*) left in stock", availability)
         if not(left_in_stock_match is None):
             number_left_in_stock = int(remove_commas(left_in_stock_match.group(1)))
-        ships_within_match = re.search(r"Available to ship in (.*)", availability)
-        if not(ships_within_match is None):
-            ships_within = ships_within_match.group(1)
-        usually_ships_within_match = re.search(r"Usually ships within (.*)\.?", availability)
-        if not(usually_ships_within_match is None):
-            ships_within = usually_ships_within_match.group(1)
-        release_date_match = re.search(r"This title will be released on (.*)\.", availability)
-        if not(release_date_match is None):
-            release_date = release_date_match.group(1)
         more_on_the_way_match = re.search(r"more on the way", availability)
         if not(more_on_the_way_match is None):
             more_on_the_way = True
@@ -305,15 +332,25 @@ def parse_product_page(product_rows, best_seller_rows, category_rows, product_pa
 
     returns_text_widgets = buybox.select("div.tabular-buybox-text[tabular-attribute-name='Returns'] span.tabular-buybox-text-message")
     if len(returns_text_widgets):
-        returns_text = only(returns_text_widgets).text
-
-    primary_delivery_widgets = buybox.select("div#mir-layout-DELIVERY_BLOCK-slot-PRIMARY_DELIVERY_MESSAGE_LARGE span.a-text-bold")
+        return_timeline_match = re.search(r"within (.*) days", only(returns_text_widgets).text.strip())
+        if not return_timeline_match is None:
+            return_until_days = int(return_timeline_match.group(1))
+    
+    primary_delivery_widgets = buybox.select("div#mir-layout-DELIVERY_BLOCK-slot-PRIMARY_DELIVERY_MESSAGE_LARGE")
     if len(primary_delivery_widgets):
-        primary_delivery_date = only(primary_delivery_widgets).text.strip()
+        primary_delivery_widget = only(primary_delivery_widgets)
+        primary_delivery_date_widgets = primary_delivery_widget.select("span.a-text-bold")
+        if len(primary_delivery_date_widgets) > 0:
+            primary_delivery_start_date, primary_delivery_end_date = parse_date(only(primary_delivery_date_widgets).text.strip(), current_year)
+        primary_shipping_cost_widgets = primary_delivery_widget.select("a.a-link_normal")
+        if len(primary_shipping_cost_widgets) > 0:
+            if only(primary_shipping_cost_widgets).text.strip() != "FREE delivery":
+                raise NotFreeDelivery()
+            primary_shipping_cost = 0
 
     secondary_delivery_widgets = buybox.select("div#mir-layout-DELIVERY_BLOCK-slot-SECONDARY_DELIVERY_MESSAGE_LARGE span.a-text-bold")
     if len(secondary_delivery_widgets) > 0:
-        secondary_delivery_date = only(secondary_delivery_widgets).text.strip()
+        secondary_delivery_start_date, secondary_delivery_end_date = parse_date(only(secondary_delivery_widgets).text.strip(), current_year)
 
     ships_from_widgets = buybox.select("div.tabular-buybox-text[tabular-attribute-name='Ships from']")
     if len(ships_from_widgets) > 0:
@@ -347,64 +384,6 @@ def parse_product_page(product_rows, best_seller_rows, category_rows, product_pa
     subscription_widgets = product_page.select("div#snsAccordionRowMiddle")
     if len(subscription_widgets):
         subscription_available = True
-
-    choose_seller_widgets = product_page.select("a[title='See All Buying Options']")
-    if len(choose_seller_widgets) > 0:
-        only(choose_seller_widgets)
-        sellers_page = read_html(path.join(product_pages_folder, product_filename + "-sellers.html"))
-        sellers = sellers_page.select("div#aod-offer")
-        # TODO: this isn't right
-        number_of_sellers_text = only(sellers_page.select("span#aod-filter-offer-count-string")).text.strip()
-        first_seller = sellers[0]
-        price_info_widgets = first_seller.select("div#aod-offer-price")
-        condition = only(first_seller.select("div#aod-offer-heading")).text.strip()
-        if len(price_info_widgets) > 0:
-            price_info_widget = only(price_info_widgets)
-            price_widgets = price_info_widget.select("div#aod-price-1 span.a-price span.a-offscreen")
-            if len(price_widgets) > 0:
-                price = get_price(only(price_widgets))
-            unit_price_widgets = price_info_widget.select("span.a-color-tertiary")
-            if len(unit_price_widgets):
-                unit_price_text = only(unit_price_widgets).text.strip()
-            delivery_widgets = price_info_widget.select("div.aod-delivery-promise")
-            if len(delivery_widgets) > 0:
-                delivery_widget = only(delivery_widgets)
-                primary_delivery_widgets = delivery_widget.select("div#mir-layout-DELIVERY_BLOCK-slot-PRIMARY_DELIVERY_MESSAGE_LARGE span[data-csa-c-delivery-type='delivery']")
-                if len(primary_delivery_widgets) > 0:
-                    primary_delivery_widget = only(primary_delivery_widgets)
-                    primary_delivery_date = primary_delivery_widget["data-csa-c-delivery-time"]
-                    primary_delivery_cost = primary_delivery_widget["data-csa-c-delivery-price"]
-                
-                secondary_delivery_widgets = delivery_widget.select("div#mir-layout-DELIVERY_BLOCK-slot-SECONDARY_DELIVERY_MESSAGE_LARGE span[data-csa-c-delivery-type='delivery']")
-                if len(secondary_delivery_widgets) > 0:
-                    secondary_delivery_widget = only(secondary_delivery_widgets)
-                    secondary_delivery_date = secondary_delivery_widget["data-csa-c-delivery-time"]
-                    secondary_delivery_cost = secondary_delivery_widget["data-csa-c-delivery-price"]
-
-        ships_from_widgets = first_seller.select("div#aod-offer-shipsFrom div.a-col-right")
-        if len(ships_from_widgets) > 0:
-            ships_from = only(ships_from_widgets).text.strip()
-
-        seller_info_widgets = first_seller.select("div#aod-offer-soldBy div.a-col-right")
-        if len(seller_info_widgets) > 0:
-            seller_info_widget = only(seller_info_widgets)
-            sold_by = only(seller_info_widget.select("a.a-link-normal")).text.strip()
-            
-        seller_ratings_widgets = seller_info_widget.select("div#aod-offer-seller-rating")
-        if len(seller_ratings_widgets) > 0:
-            seller_ratings_widget = only(seller_ratings_widgets)
-            seller_average_ratings_widgets = seller_ratings_widget.select("i.a-icon-star-mini")
-            if len(seller_average_ratings_widgets) > 0:
-                for seller_average_ratings_class in only(seller_average_ratings_widgets)["class"]:
-                    seller_average_ratings_match = re.fullmatch(r"a\-star\-mini\-(.*)", seller_average_ratings_class)
-                    if not seller_average_ratings_match is None:
-                        seller_average_rating = float(seller_average_ratings_match.group(1).replace("-", "."))
-            seller_number_of_ratings_widgets = seller_ratings_widget.select("span[id*='seller-rating-count']")
-            if len(seller_number_of_ratings_widgets) > 0:
-                seller_number_of_ratings_text = only(seller_number_of_ratings_widgets).text.strip()
-            
-            
-        # TODO: more
 
     amazons_choice_widgets = product_page.select("acBadge_feature_div")
     if len(amazons_choice_widgets) > 0:
@@ -448,8 +427,6 @@ def parse_product_page(product_rows, best_seller_rows, category_rows, product_pa
         "price": price,
         "unit_price": unit_price,
         "fakespot_rank": fakespot_rank,
-        "primary_delivery_date": primary_delivery_date,
-        "secondary_delivery_date": secondary_delivery_date,
         "ships_from": ships_from,
         "sold_by": sold_by,
         "new_seller": new_seller,
@@ -466,21 +443,20 @@ def parse_product_page(product_rows, best_seller_rows, category_rows, product_pa
         "number_of_formats": number_of_formats,
         "small_business": small_business,
         "number_left_in_stock": number_left_in_stock,
-        "ships_within": ships_within,
-        "release_date": release_date,
         "more_on_the_way": more_on_the_way,
         "list_price": list_price,
         "number_of_answered_questions": number_of_answered_questions,
         "more_than_a_thousand_answered_questions": more_than_a_thousand_answered_questions,
-        "coupon_text": coupon_text,
-        "returns_text": returns_text,
-        "condition": condition,
-        "seller_average_rating": seller_average_rating,
-        "seller_number_of_ratings_text": seller_number_of_ratings_text,
-        "unit_price_text": unit_price_text,
-        "primary_delivery_cost": primary_delivery_cost,
-        "econdary_delivery_cost": secondary_delivery_cost,
-        "number_of_sellers_text": number_of_sellers_text
+        "primary_shipping_cost": primary_shipping_cost,
+        "return_until_days": return_until_days,
+        "coupon_percent": coupon_percent,
+        "subscribe_coupon_percent": subscribe_coupon_percent,
+        "free_prime_shipping": free_prime_shipping,
+        "shipping_cost": None,
+        "primary_delivery_start_date": primary_delivery_start_date,
+        "primary_delivery_end_date": primary_delivery_end_date,
+        "secondary_delivery_start_date": secondary_delivery_start_date,
+        "secondary_delivery_end_date": secondary_delivery_end_date
     }, index = [0]))
 
 def parse_product_pages(product_pages_folder, product_results_file, best_seller_results_file, category_results_file, max_products = 10**6):
