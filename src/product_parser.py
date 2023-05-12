@@ -88,7 +88,7 @@ def get_bestseller_rank(product_filename, best_seller_widget, index):
 # product_rows = []
 # best_seller_rows = []
 # category_rows = []
-# product_filename = "Fossil-Quartz-Stainless-Steel-ChronographdpB008AXYWHQrefsr_1_36keywordswatchesformenqid1682898442sr8-36"
+# product_filename = "Boogie-Wipes-Gentle-Saline-OriginaldpB001PN82LArefsr_1_27keywordsbabywetwipesqid1682898729sbaby-productssr1-27"
 # product_page = read_html(path.join(product_pages_folder, product_filename + ".html"))
 def parse_product_page(product_rows, best_seller_rows, category_rows, product_pages_folder, product_filename):
 
@@ -157,9 +157,15 @@ def parse_product_page(product_rows, best_seller_rows, category_rows, product_pa
     list_price = None
     number_of_answered_questions = None
     more_than_a_thousand_answered_questions = False
-    number_of_sellers = 1
     returns_text = ""
     coupon_text = ""
+    condition = ""
+    number_of_sellers_text = ""
+    seller_average_rating = None
+    seller_number_of_ratings_text = ""
+    unit_price_text = ""
+    primary_delivery_cost = None
+    secondary_delivery_cost = None
 
     ratings_widgets = product_page.select("span.cr-widget-TitleRatingsHistogram")
     if len(ratings_widgets) > 0:
@@ -347,11 +353,57 @@ def parse_product_page(product_rows, best_seller_rows, category_rows, product_pa
         only(choose_seller_widgets)
         sellers_page = read_html(path.join(product_pages_folder, product_filename + "-sellers.html"))
         sellers = sellers_page.select("div#aod-offer")
-        number_of_sellers = len(sellers)
+        # TODO: this isn't right
+        number_of_sellers_text = only(sellers_page.select("span#aod-filter-offer-count-string")).text.strip()
         first_seller = sellers[0]
-        price_widgets = first_seller.select("div#aod-price-1 span.a-price span.a-offscreen")
-        if len(price_widgets) > 0:
-            price = get_price(only(price_widgets))
+        price_info_widgets = first_seller.select("div#aod-offer-price")
+        condition = only(first_seller.select("div#aod-offer-heading")).text.strip()
+        if len(price_info_widgets) > 0:
+            price_info_widget = only(price_info_widgets)
+            price_widgets = price_info_widget.select("div#aod-price-1 span.a-price span.a-offscreen")
+            if len(price_widgets) > 0:
+                price = get_price(only(price_widgets))
+            unit_price_widgets = price_info_widget.select("span.a-color-tertiary")
+            if len(unit_price_widgets):
+                unit_price_text = only(unit_price_widgets).text.strip()
+            delivery_widgets = price_info_widget.select("div.aod-delivery-promise")
+            if len(delivery_widgets) > 0:
+                delivery_widget = only(delivery_widgets)
+                primary_delivery_widgets = delivery_widget.select("div#mir-layout-DELIVERY_BLOCK-slot-PRIMARY_DELIVERY_MESSAGE_LARGE span[data-csa-c-delivery-type='delivery']")
+                if len(primary_delivery_widgets) > 0:
+                    primary_delivery_widget = only(primary_delivery_widgets)
+                    primary_delivery_date = primary_delivery_widget["data-csa-c-delivery-time"]
+                    primary_delivery_cost = primary_delivery_widget["data-csa-c-delivery-price"]
+                
+                secondary_delivery_widgets = delivery_widget.select("div#mir-layout-DELIVERY_BLOCK-slot-SECONDARY_DELIVERY_MESSAGE_LARGE span[data-csa-c-delivery-type='delivery']")
+                if len(secondary_delivery_widgets) > 0:
+                    secondary_delivery_widget = only(secondary_delivery_widgets)
+                    secondary_delivery_date = secondary_delivery_widget["data-csa-c-delivery-time"]
+                    secondary_delivery_cost = secondary_delivery_widget["data-csa-c-delivery-price"]
+
+        ships_from_widgets = first_seller.select("div#aod-offer-shipsFrom div.a-col-right")
+        if len(ships_from_widgets) > 0:
+            ships_from = only(ships_from_widgets).text.strip()
+
+        seller_info_widgets = first_seller.select("div#aod-offer-soldBy div.a-col-right")
+        if len(seller_info_widgets) > 0:
+            seller_info_widget = only(seller_info_widgets)
+            sold_by = only(seller_info_widget.select("a.a-link-normal")).text.strip()
+            
+        seller_ratings_widgets = seller_info_widget.select("div#aod-offer-seller-rating")
+        if len(seller_ratings_widgets) > 0:
+            seller_ratings_widget = only(seller_ratings_widgets)
+            seller_average_ratings_widgets = seller_ratings_widget.select("i.a-icon-star-mini")
+            if len(seller_average_ratings_widgets) > 0:
+                for seller_average_ratings_class in only(seller_average_ratings_widgets)["class"]:
+                    seller_average_ratings_match = re.fullmatch(r"a\-star\-mini\-(.*)", seller_average_ratings_class)
+                    if not seller_average_ratings_match is None:
+                        seller_average_rating = float(seller_average_ratings_match.group(1).replace("-", "."))
+            seller_number_of_ratings_widgets = seller_ratings_widget.select("span[id*='seller-rating-count']")
+            if len(seller_number_of_ratings_widgets) > 0:
+                seller_number_of_ratings_text = only(seller_number_of_ratings_widgets).text.strip()
+            
+            
         # TODO: more
 
     amazons_choice_widgets = product_page.select("acBadge_feature_div")
@@ -421,8 +473,14 @@ def parse_product_page(product_rows, best_seller_rows, category_rows, product_pa
         "number_of_answered_questions": number_of_answered_questions,
         "more_than_a_thousand_answered_questions": more_than_a_thousand_answered_questions,
         "coupon_text": coupon_text,
-        "number_of_sellers": number_of_sellers,
-        "returns_text": returns_text
+        "returns_text": returns_text,
+        "condition": condition,
+        "seller_average_rating": seller_average_rating,
+        "seller_number_of_ratings_text": seller_number_of_ratings_text,
+        "unit_price_text": unit_price_text,
+        "primary_delivery_cost": primary_delivery_cost,
+        "econdary_delivery_cost": secondary_delivery_cost,
+        "number_of_sellers_text": number_of_sellers_text
     }, index = [0]))
 
 def parse_product_pages(product_pages_folder, product_results_file, best_seller_results_file, category_results_file, max_products = 10**6):

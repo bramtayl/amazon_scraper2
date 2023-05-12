@@ -80,9 +80,9 @@ find_products(product_pages_folder, lambda product_page, sellers_page: len(produ
 # deals
 parse_product_pages(
     product_pages_folder,
-    path.join("data", "product_results.csv"),
-    path.join("data", "best_seller_results.csv"),
-    path.join("data", "category_results.csv")
+    product_results_file,
+    best_seller_results_file,
+    category_results_file
 )
 
 
