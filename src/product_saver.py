@@ -1,5 +1,6 @@
+from bs4 import BeautifulSoup
 from datetime import datetime
-from os import path
+from os import listdir, path
 from pandas import DataFrame
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import TimeoutException
@@ -14,7 +15,8 @@ from src.utilities import (
     get_filenames,
     new_browser,
     only,
-    save_page,
+    read_html,
+    save_soup,
     wait_for_amazon,
     WAIT_TIME,
 )
@@ -32,7 +34,7 @@ def has_partial_buyboxes(browser):
     return len(browser.find_elements(By.CSS_SELECTOR, "#partialStateBuybox")) > 0
 
 
-JUNK_SELECTORS = [
+PRODUCT_JUNK_SELECTORS = [
     "map",
     "meta",
     "noscript",
@@ -136,9 +138,9 @@ def save_product_page(
             located((By.CSS_SELECTOR, "div.askInlineWidget"))
         )
 
-    save_page(
-        browser,
-        JUNK_SELECTORS,
+    save_soup(
+        BeautifulSoup(browser.page_source, "lxml"),
+        PRODUCT_JUNK_SELECTORS,
         path.join(product_pages_folder, product_filename + ".html"),
     )
     print(product_filename)
@@ -157,12 +159,19 @@ def save_product_page(
         wait(browser, WAIT_TIME).until(located((By.CSS_SELECTOR, "#aod-offer-list")))
 
         # save the second page
-        save_page(
-            browser,
-            JUNK_SELECTORS,
+        save_soup(
+            browser.page_source,
+            PRODUCT_JUNK_SELECTORS,
             path.join(product_pages_folder, product_filename + "-sellers.html"),
         )
 
+def reclean_product_pages(product_pages_folder):
+    for file in listdir(product_pages_folder):
+        save_soup(
+            read_html(path.join(product_pages_folder, file)),
+            PRODUCT_JUNK_SELECTORS,
+            file
+        )
 
 def save_product_pages(
     browser_box,

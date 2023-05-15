@@ -1,5 +1,6 @@
+from bs4 import BeautifulSoup
 from datetime import datetime
-from os import chdir, path
+from os import chdir, listdir, path
 from pandas import DataFrame
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
@@ -13,7 +14,8 @@ from src.utilities import (
     get_filenames,
     new_browser,
     only,
-    save_page,
+    read_html,
+    save_soup,
     wait_for_amazon,
     WentWrongError,
 )
@@ -26,6 +28,45 @@ def find_department_option_index(browser, department):
         if option.text == department:
             return index
     raise Exception("Department " + department + " not found!")
+
+SEARCH_JUNK_SELECTORS = [
+    "map",
+    "meta",
+    "noscript",
+    "script",
+    "style",
+    "svg",
+    "video",
+    "#ad-endcap-1_feature_div",
+    "#ad-display-center-1_feature_div",
+    "#amsDetailRight_feature_div",
+    "#aplusBrandStory_feature_div",
+    "#beautyRecommendations_feature_div",
+    "#discovery-and-inspiration_feature_div",
+    "#dp-ads-center-promo_feature_div",
+    "#dp-ads-center-promo-top_feature_div",
+    "#dp-ads-middle_feature_div",
+    "#gridgetWrapper",
+    "#HLCXComparisonWidget_feature_div",
+    "#imageBlock_feature_div",
+    "#navbar-main",
+    "#navFooter",
+    "#navtop",
+    "#nav-upnav",
+    "#percolate-ui-ilm_div",
+    "#postsSameBrandCard_feature_div",
+    "#product-ads-feedback_feature_div",
+    "#similarities_feature_div",
+    "#skiplink",
+    "#storeDisclaimer_feature_div",
+    "#va-related-videos-widget_feature_div",
+    "#valuePick_feature_div",
+    "#sims-themis-sponsored-products-2_feature_div",
+    "#sponsoredProducts2_feature_div",
+    ".reviews-display-ad",
+    "div.fs-trusted-recos",
+    "div#HLCXComparisonWidgetNonTechnical_feature_div",
+]
 
 
 # query = "fire hd 10 tablet"
@@ -68,35 +109,9 @@ def save_search_page(
 
     # the CSS selector is for all the parts we don't need
     # save the page to the folder
-    save_page(
-        browser,
-        [
-            "map",
-            "meta",
-            "noscript",
-            "script",
-            "style",
-            "svg",
-            "video",
-            "#rhf",
-            "span[data-component-type='s-filters-panel-view']",
-            "a[title='tab to skip to main search results']",
-            "#navbar-main",
-            "span[data-component-type='s-result-info-bar']",
-            "div[cel_widget_id*='MAIN-QUESTION_ANSWER']",
-            "div[cel_widget_id*='VISUAL_NAVIGATION']",
-            "div[cel_widget_id*='MAIN-SHOPPING_ADVISER']",
-            "div[cel_widget_id*='MAIN-FEATURED_ASINS_LIST']",
-            "div[cel_widget_id*='MAIN-TEXT_REFORMULATION']",
-            "div[data-csa-c-painter*='creative-desktop-card']",
-            "#ape_Search_auto-bottom-advertising-0_portal-batch-fast-btf-loom_placement",
-            "#navFooter",
-            "div[data-cel-widget*='LEFT-SAFE_FRAME']",
-            "div.widgetId\\=loom-desktop-top-slot_automotive-part-finder",
-            "div[cel_widget_id*='MAIN-FEEDBACK']",
-            "div[cel_widget_id*='MAIN-PAGINATION']",
-            "div.s-main-slot.s-result-list > div[data-component-type='s-search-result'][data-asin='']",
-        ],
+    save_soup(
+        BeautifulSoup(browser.page_source, "lxml"),
+        SEARCH_JUNK_SELECTORS,
         path.join(search_pages_folder, search_id + ".html"),
     )
 
@@ -112,6 +127,13 @@ def go_to_amazon(browser):
         browser.get(url)
         wait_for_amazon(browser)
 
+def reclean_search_pages(search_pages_folder):
+    for file in listdir(search_pages_folder):
+        save_soup(
+            read_html(path.join(search_pages_folder, file)),
+            SEARCH_JUNK_SELECTORS,
+            file
+        )
 
 def save_search_pages(
     browser_box,

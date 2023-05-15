@@ -1,4 +1,4 @@
-from os import path
+from os import listdir, path
 from pandas import concat, DataFrame
 import re
 from src.utilities import get_filenames, only, read_html
@@ -12,40 +12,51 @@ def remove_commas(a_string):
 
 
 def parse_price(price_text):
+    # dollar sign, then digits, commas, and decimals
     return float(remove_commas(re.search(r"\$[\d\.,]+", price_text).group(1)))
 
 def get_star_percentage(histogram_row):
+    # dollar sign, then digits
+    # no commas, because never over 1000, and no decimals
     return int(re.search(
-        "(\d+)%", only(histogram_row.select(".a-text-right > .a-size-base"))
+        "(\d+)%", only(histogram_row.select("div.a-text-right > a.a-size-base"))
     ).group(1))
 
+# debugging function for finding particular product pages
+def find_products(product_pages_folder, a_function, number_of_products = 5):
+    found = 0
+    for product_filename in listdir(product_pages_folder):
+        product_file = path.join(product_pages_folder, product_filename)
+        product_page = read_html(product_file)
+        if a_function(product_page):
+            webbrowser.open(product_file)
+            found = found + 1
+            if found == number_of_products:
+                break
 
+# error if there aren't rows for each of 1-5 stars
 class NotFiveRows(Exception):
     pass
 
 
+# error if we misidentify an unsupported browser pages
 class NotUnsupported(Exception):
     pass
 
 
+# there should be either just one price, or a price and a unit price
 class NotOneOrTwoPrices(Exception):
     pass
 
-
-class NotFreePrime(Exception):
+# error if we can't find a date
+class NoDate(Exception):
     pass
 
-
-class NotFreeDelivery(Exception):
-    pass
-
-
-class UnrecognizedDate(Exception):
-    pass
-
-
+# convert fakespot grades to a numerical rank
+# this is still ordinal, not cardinal
 FAKESPOT_RANKINGS = {"A": 1, "B": 2, "C": 3, "D": 4, "F": 5, "?": None}
 
+# convert month names to numbers
 MONTH_NUMBERS = {
     "January": 1,
     "February": 2,
@@ -63,7 +74,12 @@ MONTH_NUMBERS = {
 
 
 def parse_dates(date_text, current_year):
+    # TODO: theoretically, date ranges could span different years
+    # e.g. December 31 2023 - January 1 2024
+    # would be nice to support
+
     # date range with different months
+    # e.g. January 1 - February 10
     multi_month_match = re.search(r"(\w+) (\d+) \- (\w+) (\d+)", date_text)
     if not multi_month_match is None:
         return date(
@@ -77,6 +93,7 @@ def parse_dates(date_text, current_year):
         )
     
     # date range within one month
+    # e.g. January 1 - 4
     single_month_match = re.search(r"(\w+) (\d+) \- (\d+)", date_text)
     if not single_month_match is None:
         month_number = MONTH_NUMBERS[single_month_match.group(1)]
@@ -85,6 +102,7 @@ def parse_dates(date_text, current_year):
         )
 
     # single date
+    # e.g. January 1
     single_day_match = re.search(r"(\w+) (\d+)", date_text)
     if not single_day_match is None:
         return (
@@ -96,12 +114,14 @@ def parse_dates(date_text, current_year):
             None,
         )
 
-    raise UnrecognizedDate(date_text)
+    raise NoDate(date_text)
 
 
 def parse_bestseller_rank(product_filename, best_seller_widget, index):
     # e.g. #2 in Toys & Games (...
-    match = re.search(r"#(\d+)\s+in\s+([^\(]*)", best_seller_widget.text.strip())
+    # digits or commas for numbers
+    # read category until we reach a left parenthesis
+    match = re.search(r"#([\d,]+)\s+in\s+([^\(]*)", best_seller_widget.text.strip())
     return DataFrame(
         {
             "order": index + 1,
@@ -112,17 +132,17 @@ def parse_bestseller_rank(product_filename, best_seller_widget, index):
         index=[0],
     )
 
-# some widgets could either be a single thing, or only one of a few things visible
+# some widgets could either be a single widget, or the only visible widget from a group
 def get_visible_one(widget):
     widgets = widget.select(
-        # style is hidden for hidden things
+        # select the non-hidden widget
+        # style='hidden' for hidden widgets
         "div.offersConsistencyEnabled > div[style='']"
     )
     if len(widgets) > 0:
         return widgets[0]
     else:
         return widget
-
 
 def parse_product_page(
     product_rows,
@@ -139,6 +159,7 @@ def parse_product_page(
     # return without doing anything for a variety of non-standard product pages
     unsupported_browser_widgets = product_page.select("h2.heading.title")
     if unsupported_browser_widgets:
+        # this is a non-specific CSS selector, so check the text too
         if (
             only(unsupported_browser_widgets).text.strip()
             != "Your browser is not supported"
@@ -146,41 +167,48 @@ def parse_product_page(
             raise NotUnsupported()
         return
 
+    # can't find the product, so consider alternatives
     consider_alternative_widgets = product_page.select("div#percolate-ui-lpo_div")
     if consider_alternative_widgets:
         only(consider_alternative_widgets)
         return
-
+    
+    # this is heading that contains the main product type
+    # if the heading is missing, it's not really a product
+    # like a link to the Amazon music player, etc.
     product_type_widgets = product_page.select("div#dp")
-    if product_type_widgets:
+    if not product_type_widgets:
         return
 
     product_type = only(product_type_widgets)["class"][0]
     if (
         product_type == "book"
+        # digital products
         or product_type == "ebooks"
         # digital magazines
         or product_type == "digitaltextfeeds"
         or product_type == "digital_software"
-        # iPhones etc.
-        or product_type == "device-type-desktop"
         or product_type == "audible"
+        or product_type == "device-type-desktop"
         # subscription boxes
         or product_type == "swa_physical"
     ):
         return
 
+    # used only products have a different format
     used_only_widgets = product_page.select("div#usedOnlyBuybox")
     if used_only_widgets:
         only(used_only_widgets)
         return
 
+    # so do refurbished products
     refurbished_options = product_page.select(
         "div#buyBoxAccordion > div[id*='renewed']"
     )
     if refurbished_options:
         return
 
+    # add defaults for all our variables
     amazons_choice = False
     average_rating = None
     climate_friendly = False
@@ -206,11 +234,12 @@ def parse_product_page(
     return_until_days = None
     secondary_delivery_start_date = None
     secondary_delivery_end_date = None
-    ships_from_amazon = False
+    ships_from_amazon = None
     small_business = False
     sold_by_amazon = None
     subscription_available = False
     subscribe_for_coupon = False
+    temporarily_out_of_stock = False
     undeliverable = False
     unit = ""
     unit_price = None
@@ -227,6 +256,7 @@ def parse_product_page(
         category_rows.append(
             DataFrame(
                 {
+                    # +1 for 1 based indexing
                     "order": index + 1,
                     "category": category_widget.text.strip(),
                     "product_filename": product_filename,
@@ -237,15 +267,16 @@ def parse_product_page(
 
     answered_questions_widgets = product_page.select("a#askATFLink")
     if answered_questions_widgets:
+        # digits, or commas, or + for 1000+
         answered_questions_text = re.search(
-            "([\d\+\,]+) answered questions?", only(answered_questions_widgets).text.strip()
+            "([\d\+\,]+)", only(answered_questions_widgets).text.strip()
         ).group(1)
         if answered_questions_text == "1000+":
             over_a_thousand_answered_questions = True
         else:
             number_of_answered_questions = int(answered_questions_text)
 
-    amazons_choice_widgets = product_page.select("acBadge_feature_div")
+    amazons_choice_widgets = product_page.select("div#acBadge_feature_div")
     if amazons_choice_widgets:
         only(amazons_choice_widgets)
         amazons_choice = True
@@ -292,22 +323,26 @@ def parse_product_page(
     # details are either formatted as bullets or a table
 
     # table best sellers
+    # best seller links are easy to find
     for index, best_seller_link in enumerate(
         product_page.select("div#prodDetails a[href*='/gp/bestsellers']")
     ):
+        # the parent of the best seller link is the best seller row
         best_seller_rows.append(
             parse_bestseller_rank(product_filename, best_seller_link.parent, index)
         )
     
+    # the first bullet one will contain the rest of the bullets
+    # again, best seller links are easy to find
     bullet_best_seller_links = product_page.select(
         "div#detailBulletsWrapper_feature_div a[href*='/gp/bestsellers/']"
     )
 
     for index, best_seller_link in enumerate(bullet_best_seller_links):
-        # for bullets, the first one will contain the rest too
-        # so we need to select just the bullet from it
+        # the parent of the best seller link is the best seller bullet
+        best_seller_widget = best_seller_link.parent
+        # for the first bullet, exclude other bullets inside it
         if len(bullet_best_seller_links) > 1 and index == 0:
-            best_seller_widget = best_seller_link.parent
             best_seller_rows.append(
                 parse_bestseller_rank(
                     product_filename, best_seller_widget.contents[2], index
@@ -326,14 +361,16 @@ def parse_product_page(
         )
         if average_ratings_widgets:
             average_rating = float(
-                re.fullmatch(
-                    r"(.*) out of 5", only(average_ratings_widgets).text.strip()
+                re.search(
+                    # digits or decimals
+                    r"([\d\.]+) out of 5", only(average_ratings_widgets).text
                 ).group(1)
             )
             number_of_ratings = int(
                 remove_commas(
-                    re.fullmatch(
-                        r"(.*) global ratings?",
+                    re.search(
+                        # digits or commas
+                        r"([\d\,]+)",
                         only(
                             ratings_widget.select(
                                 "[data-hook='total-review-count']",
@@ -422,19 +459,19 @@ def parse_product_page(
         left_in_stock_match = re.search(r"Only (.*) left in stock", availability)
         if not (left_in_stock_match is None):
             number_left_in_stock = int(remove_commas(left_in_stock_match.group(1)))
-        more_on_the_way_match = re.search(r"more on the way", availability)
-        if not (more_on_the_way_match is None):
+        if "more on the way" in availability:
             more_on_the_way = True
-        out_of_stock_match = re.search(r"Temporarily out of stock", availability)
-        if not (out_of_stock_match is None):
-            out_of_stock = True
+        if "Temporarily out of stock" in availability:
+            temporarily_out_of_stock = True
 
     non_returnable_widgets = product_page.select(
         "div#dsvReturnPolicyMessage_feature_div"
     )
+    # TODO: check the text here
     if non_returnable_widgets:
         returnable = False
 
+    # TODO: check the text here
     returns_widgets = buybox.select("a#creturns-policy-anchor-text")
     if returns_widgets:
         free_returns = True
@@ -445,17 +482,16 @@ def parse_product_page(
     if primary_delivery_widgets:
         primary_delivery_widget = only(primary_delivery_widgets)
         primary_shipping_text = primary_delivery_widget.text.strip()
-        primary_shipping_cost_match = re.search(
-            "([^ ]*).*delivery", primary_shipping_text
-        )
-        if not primary_shipping_cost_match is None:
-            primary_shipping_cost_text = primary_shipping_cost_match.group(1)
-            if primary_shipping_cost_text == "FREE":
-                primary_shipping_cost = 0
-            else:
-                primary_shipping_cost = parse_price(primary_shipping_cost_text.text)
+        if "FREE" in primary_shipping_text:
+            primary_shipping_cost = 0
+        else:
+            primary_shipping_cost_match = re.search(
+                "(\$[\d\.\,]+).*delivery", primary_shipping_text
+            )
+            if not primary_shipping_cost_match is None:
+                primary_shipping_cost = parse_price(primary_shipping_cost_match.group(1).text)
 
-        if not re.search(r"on orders shipped by Amazon over", primary_shipping_text):
+        if "on orders shipped by Amazon over" in primary_shipping_text:
             conditional_shipping = True
 
         primary_delivery_start_date, primary_delivery_end_date = parse_dates(
@@ -475,24 +511,20 @@ def parse_product_page(
         "div.tabular-buybox-text[tabular-attribute-name='Ships from']"
     )
     if ships_from_widgets:
-        ships_from_amazon = (
-            not re.search(r"Amazon", only(ships_from_widgets).text.strip()) is None
-        )
+        ships_from_amazon = "Amazon" in only(ships_from_widgets).text
 
     sold_by_widgets = buybox.select(
         "div.tabular-buybox-text[tabular-attribute-name='Sold by']"
     )
     if sold_by_widgets:
-        sold_by_amazon = (
-            not re.search(r"Amazon", only(sold_by_widgets).text.strip()) is None
-        )
+        sold_by_amazon = "Amazon" in only(sold_by_widgets).text
 
     returns_text_widgets = buybox.select(
         "div.tabular-buybox-text[tabular-attribute-name='Returns'] span.tabular-buybox-text-message"
     )
     if returns_text_widgets:
         return_timeline_match = re.search(
-            r"within (.*) days", only(returns_text_widgets).text.strip()
+            r"(\d+)", only(returns_text_widgets).text.strip()
         )
         if not return_timeline_match is None:
             return_until_days = int(return_timeline_match.group(1))
@@ -534,6 +566,7 @@ def parse_product_page(
                 "sold_by_amazon": sold_by_amazon,
                 "subscription_available": subscription_available,
                 "subscribe_for_coupon": subscribe_for_coupon,
+                "temporarily_out_of_stock": temporarily_out_of_stock,
                 "undeliverable": undeliverable,
                 "unit": unit,
                 "unit_price": unit_price,
