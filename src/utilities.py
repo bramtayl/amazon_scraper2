@@ -107,8 +107,7 @@ def is_empty_div(thing):
     return all(is_empty_div(child) for child in thing.contents)
 
 
-def save_soup(html, junk_selectors, filename):
-    page = BeautifulSoup(html, "lxml")
+def save_soup(page, junk_selectors, filename):
     for junk in page.select(", ".join(junk_selectors)):
         junk.extract()
     for comment in page(text=lambda text: isinstance(text, Comment)):
