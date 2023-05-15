@@ -5,19 +5,19 @@ from src.utilities import get_filenames, only, read_html
 import webbrowser
 from datetime import date
 
+
 # e.g. 1,000 -> 1000
 def remove_commas(a_string):
     return a_string.replace(",", "")
 
 
-def get_price(price_text):
-    return float(remove_commas(re.fullmatch(r"\$(.*)", price_text).group(1)))
-
+def parse_price(price_text):
+    return float(remove_commas(re.search(r"\$[\d\.,]+", price_text).group(1)))
 
 def get_star_percentage(histogram_row):
-    return re.fullmatch(
-        "(.*)%", only(histogram_row.select(".a-text-right > .a-size-base")).text.strip()
-    ).group(1)
+    return int(re.search(
+        "(\d+)%", only(histogram_row.select(".a-text-right > .a-size-base"))
+    ).group(1))
 
 
 class NotFiveRows(Exception):
@@ -61,7 +61,9 @@ MONTH_NUMBERS = {
     "December": 12,
 }
 
-def parse_date(date_text, current_year):
+
+def parse_dates(date_text, current_year):
+    # date range with different months
     multi_month_match = re.search(r"(\w+) (\d+) \- (\w+) (\d+)", date_text)
     if not multi_month_match is None:
         return date(
@@ -73,7 +75,8 @@ def parse_date(date_text, current_year):
             MONTH_NUMBERS[multi_month_match.group(3)],
             int(multi_month_match.group(4)),
         )
-
+    
+    # date range within one month
     single_month_match = re.search(r"(\w+) (\d+) \- (\d+)", date_text)
     if not single_month_match is None:
         month_number = MONTH_NUMBERS[single_month_match.group(1)]
@@ -81,6 +84,7 @@ def parse_date(date_text, current_year):
             current_year, month_number, int(single_month_match.group(3))
         )
 
+    # single date
     single_day_match = re.search(r"(\w+) (\d+)", date_text)
     if not single_day_match is None:
         return (
@@ -94,10 +98,10 @@ def parse_date(date_text, current_year):
 
     raise UnrecognizedDate(date_text)
 
+
 def parse_bestseller_rank(product_filename, best_seller_widget, index):
-    match = re.search(
-        r"#(\d+)\s+in\s+([^\(]*)", best_seller_widget.text.strip()
-    )
+    # e.g. #2 in Toys & Games (...
+    match = re.search(r"#(\d+)\s+in\s+([^\(]*)", best_seller_widget.text.strip())
     return DataFrame(
         {
             "order": index + 1,
@@ -108,6 +112,17 @@ def parse_bestseller_rank(product_filename, best_seller_widget, index):
         index=[0],
     )
 
+# some widgets could either be a single thing, or only one of a few things visible
+def get_visible_one(widget):
+    widgets = widget.select(
+        # style is hidden for hidden things
+        "div.offersConsistencyEnabled > div[style='']"
+    )
+    if len(widgets) > 0:
+        return widgets[0]
+    else:
+        return widget
+
 
 def parse_product_page(
     product_rows,
@@ -117,7 +132,9 @@ def parse_product_page(
     product_filename,
     current_year=2023,
 ):
-    product_page = read_html(path.join(product_pages_folder, product_filename + ".html"))
+    product_page = read_html(
+        path.join(product_pages_folder, product_filename + ".html")
+    )
 
     # return without doing anything for a variety of non-standard product pages
     unsupported_browser_widgets = product_page.select("h2.heading.title")
@@ -142,10 +159,13 @@ def parse_product_page(
     if (
         product_type == "book"
         or product_type == "ebooks"
+        # digital magazines
         or product_type == "digitaltextfeeds"
         or product_type == "digital_software"
+        # iPhones etc.
         or product_type == "device-type-desktop"
         or product_type == "audible"
+        # subscription boxes
         or product_type == "swa_physical"
     ):
         return
@@ -175,7 +195,6 @@ def parse_product_page(
     new_seller = False
     number_left_in_stock = None
     number_of_answered_questions = None
-    number_of_formats = 1
     number_of_ratings = None
     out_of_stock = False
     over_a_thousand_answered_questions = False
@@ -191,10 +210,10 @@ def parse_product_page(
     small_business = False
     sold_by_amazon = None
     subscription_available = False
-    subscribe_coupon_percent = None
+    subscribe_for_coupon = False
     undeliverable = False
     unit = ""
-    unit_price = None    
+    unit_price = None
 
     one_star_percentage = None
     two_star_percentage = None
@@ -218,8 +237,8 @@ def parse_product_page(
 
     answered_questions_widgets = product_page.select("a#askATFLink")
     if answered_questions_widgets:
-        answered_questions_text = re.fullmatch(
-            "(.*) answered questions?", only(answered_questions_widgets).text.strip()
+        answered_questions_text = re.search(
+            "([\d\+\,]+) answered questions?", only(answered_questions_widgets).text.strip()
         ).group(1)
         if answered_questions_text == "1000+":
             over_a_thousand_answered_questions = True
@@ -230,7 +249,7 @@ def parse_product_page(
     if amazons_choice_widgets:
         only(amazons_choice_widgets)
         amazons_choice = True
-    
+
     climate_friendly_widgets = product_page.select("div#climatePledgeFriendly")
     if climate_friendly_widgets:
         only(climate_friendly_widgets)
@@ -243,44 +262,24 @@ def parse_product_page(
         only(small_business_widgets)
         small_business = True
 
-    center_priceboxes_containers = product_page.select("div#apex_desktop")
-    if center_priceboxes_containers:
-        center_priceboxes_container = only(center_priceboxes_containers)
-        center_priceboxes = center_priceboxes_container.select(
-            "div.offersConsistencyEnabled > div[style='']"
-        )
-        if len(center_priceboxes) > 0:
-            center_pricebox = center_priceboxes[0]
-        else:
-            center_pricebox = center_priceboxes_container
-        list_price_widgets = center_pricebox.select(
+    center_priceboxes = product_page.select("div#apex_desktop")
+    if center_priceboxes:
+        list_price_widgets = get_visible_one(only(center_priceboxes)).select(
             "span.a-price[data-a-strike='true'] span.a-offscreen"
         )
         if len(list_price_widgets) > 0:
-            list_price = get_price(only(list_price_widgets).text.strip())
+            list_price = parse_price(only(list_price_widgets).text)
 
-    promo_widget_containers = product_page.select("#promoPriceBlockMessage_feature_div")
-    if promo_widget_containers:
-        promo_widget_container = only(promo_widget_containers)
-        promo_widgets = promo_widget_container.select(
-            "div.offersConsistencyEnabled > div[style='']"
-        )
-        if promo_widgets:
-            promo_widget = promo_widgets[0]
-        else:
-            promo_widget = promo_widget_container
-
-        coupon_widgets = promo_widget.select("label[id*='couponText']")
+    promo_widgets = product_page.select("#promoPriceBlockMessage_feature_div")
+    if promo_widgets:
+        coupon_widgets = get_visible_one(only(promo_widgets)).select("label[id*='couponText']")
         if coupon_widgets:
             coupon_text = only(coupon_widgets).text.strip()
-            coupon_match = re.search(r"Apply (.*)% coupon", coupon_text)
+            coupon_match = re.search(r"(\d+)%", coupon_text)
             if not coupon_match is None:
                 coupon_percent = int(coupon_match.group(1))
-            subscribe_coupon_match = re.search(
-                r"Save (.*)%.*Subscribe & Save", coupon_text
-            )
-            if not subscribe_coupon_match is None:
-                subscribe_coupon_percent = int(subscribe_coupon_match.group(1))
+            if "Subscribe & Save" in coupon_text:
+                subscribe_for_coupon = True
 
     hidden_price_widgets = product_page.select(
         "a[href='/forum/where%20is%20the%20price']"
@@ -288,30 +287,37 @@ def parse_product_page(
     if hidden_price_widgets:
         only(hidden_price_widgets)
         hidden_prices = True
-    
+
+    # best seller ranks are in the details
+    # details are either formatted as bullets or a table
+
+    # table best sellers
     for index, best_seller_link in enumerate(
         product_page.select("div#prodDetails a[href*='/gp/bestsellers']")
     ):
         best_seller_rows.append(
             parse_bestseller_rank(product_filename, best_seller_link.parent, index)
         )
-
-    best_seller_bullets = product_page.select(
+    
+    bullet_best_seller_links = product_page.select(
         "div#detailBulletsWrapper_feature_div a[href*='/gp/bestsellers/']"
     )
 
-    for index, best_seller_link in enumerate(best_seller_bullets):
-        if len(best_seller_bullets) > 1 and index == 0:
+    for index, best_seller_link in enumerate(bullet_best_seller_links):
+        # for bullets, the first one will contain the rest too
+        # so we need to select just the bullet from it
+        if len(bullet_best_seller_links) > 1 and index == 0:
+            best_seller_widget = best_seller_link.parent
             best_seller_rows.append(
                 parse_bestseller_rank(
-                    product_filename, best_seller_link.parent.contents[2], index
+                    product_filename, best_seller_widget.contents[2], index
                 )
             )
         else:
             best_seller_rows.append(
-                parse_bestseller_rank(product_filename, best_seller_link.parent, index)
+                parse_bestseller_rank(product_filename, best_seller_widget, index)
             )
-    
+
     ratings_widgets = product_page.select("span.cr-widget-TitleRatingsHistogram")
     if ratings_widgets:
         ratings_widget = only(ratings_widgets)
@@ -345,22 +351,24 @@ def parse_product_page(
             three_star_percentage = get_star_percentage(histogram_rows[2])
             two_star_percentage = get_star_percentage(histogram_rows[3])
             one_star_percentage = get_star_percentage(histogram_rows[4])
-    
+
     fakespot_widgets = product_page.select("div.fakespot-main-grade-box-wrapper")
     if fakespot_widgets:
         fakespot_rank = FAKESPOT_RANKINGS[
             only(product_page.select("div#fs-letter-grade-box")).text.strip()
         ]
-    
+
     new_seller_widgets = product_page.select("div#fakespot-badge")
     if new_seller_widgets:
         only(new_seller_widgets)
         new_seller = True
 
-    accordion_rows = product_page.select("#buyBoxAccordion > div[id*='AccordionRow']")
-    if accordion_rows:
-        number_of_formats = len(accordion_rows)
-        buybox = accordion_rows[0]
+    # box on the right where you buy the product
+    # sometimes there is multiple buyboxes for different options
+    multiple_buyboxes = product_page.select("#buyBoxAccordion > div[id*='AccordionRow']")
+    if multiple_buyboxes:
+        # use the first buybox
+        buybox = multiple_buyboxes[0]
     else:
         buybox = only(
             product_page.select("div[data-csa-c-content-id='desktop_buybox_group_1']")
@@ -376,6 +384,7 @@ def parse_product_page(
         only(undeliverable_widgets)
         undeliverable = True
 
+    # price and unit price
     price_pair_widgets = buybox.select("div#corePrice_feature_div")
     if price_pair_widgets:
         price_pair_widget = only(price_pair_widgets)
@@ -383,12 +392,12 @@ def parse_product_page(
         if len(price_widgets) == 0:
             pass
         elif len(price_widgets) == 1:
-            price = get_price(price_widgets[0].text.strip())
+            price = parse_price(price_widgets[0].text)
         elif len(price_widgets) == 2:
-            price = get_price(price_widgets[0].text.strip())
-            unit_price = get_price(price_widgets[0].text.strip())
+            price = parse_price(price_widgets[0].text)
+            unit_price = parse_price(price_widgets[0].text)
             unit = (
-                re.search(r"\/(.*)\)", price_pair_widget.text.strip()).group(1).strip()
+                re.search(r"\/(.*)\)", price_pair_widget.text).group(1).strip()
             )
         else:
             raise NotOneOrTwoPrices()
@@ -444,12 +453,12 @@ def parse_product_page(
             if primary_shipping_cost_text == "FREE":
                 primary_shipping_cost = 0
             else:
-                primary_shipping_cost = get_price(primary_shipping_cost_text)
+                primary_shipping_cost = parse_price(primary_shipping_cost_text.text)
 
         if not re.search(r"on orders shipped by Amazon over", primary_shipping_text):
             conditional_shipping = True
 
-        primary_delivery_start_date, primary_delivery_end_date = parse_date(
+        primary_delivery_start_date, primary_delivery_end_date = parse_dates(
             primary_delivery_widget["data-csa-c-delivery-time"], current_year
         )
 
@@ -458,7 +467,7 @@ def parse_product_page(
     )
     if secondary_delivery_widgets:
         secondary_delivery_widget = only(secondary_delivery_widgets)
-        secondary_delivery_start_date, secondary_delivery_end_date = parse_date(
+        secondary_delivery_start_date, secondary_delivery_end_date = parse_dates(
             secondary_delivery_widget["data-csa-c-delivery-time"], current_year
         )
 
@@ -477,7 +486,7 @@ def parse_product_page(
         sold_by_amazon = (
             not re.search(r"Amazon", only(sold_by_widgets).text.strip()) is None
         )
-    
+
     returns_text_widgets = buybox.select(
         "div.tabular-buybox-text[tabular-attribute-name='Returns'] span.tabular-buybox-text-message"
     )
@@ -491,49 +500,48 @@ def parse_product_page(
     subscription_widgets = product_page.select("div#snsAccordionRowMiddle")
     if subscription_widgets:
         subscription_available = True
-    
-    product_rows.append(
-        DataFrame({
-            "amazons_choice": amazons_choice,
-            "average_rating": average_rating,
-            "climate_friendly": climate_friendly,
-            "conditional_shipping": conditional_shipping,
-            "coupon_percent": coupon_percent,
-            "fakespot_rank": fakespot_rank,
-            "free_returns": free_returns,
-            "free_prime_shipping": free_prime_shipping,
-            "hidden_prices": hidden_prices,
-            "list_price": list_price,
-            "more_on_the_way": more_on_the_way,
-            "new_seller": new_seller,
-            "number_left_in_stock": number_left_in_stock,
-            "number_of_answered_questions": number_of_answered_questions,
-            "number_of_formats": number_of_formats,
-            "number_of_ratings": number_of_ratings,
-            "out_of_stock": out_of_stock,
-            "over_a_thousand_answered_questions": over_a_thousand_answered_questions,
-            "price": price,
-            "primary_delivery_start_date": primary_delivery_start_date,
-            "primary_delivery_end_date": primary_delivery_end_date,
-            "primary_shipping_cost": primary_shipping_cost,
-            "returnable": returnable,
-            "return_until_days": return_until_days,
-            "secondary_delivery_start_date": secondary_delivery_start_date,
-            "secondary_delivery_end_date": secondary_delivery_end_date,
-            "ships_from_amazon": ships_from_amazon,
-            "small_business": small_business,
-            "sold_by_amazon": sold_by_amazon,
-            "subscription_available": subscription_available,
-            "subscribe_coupon_percent": subscribe_coupon_percent,
-            "undeliverable": undeliverable,
-            "unit": unit,
-            "unit_price": unit_price,
 
-            "one_star_percentage": one_star_percentage,
-            "two_star_percentage": two_star_percentage,
-            "three_star_percentage": three_star_percentage,
-            "four_star_percentage": four_star_percentage,
-            "five_star_percentage": five_star_percentage,
+    product_rows.append(
+        DataFrame(
+            {
+                "amazons_choice": amazons_choice,
+                "average_rating": average_rating,
+                "climate_friendly": climate_friendly,
+                "conditional_shipping": conditional_shipping,
+                "coupon_percent": coupon_percent,
+                "fakespot_rank": fakespot_rank,
+                "free_returns": free_returns,
+                "free_prime_shipping": free_prime_shipping,
+                "hidden_prices": hidden_prices,
+                "list_price": list_price,
+                "more_on_the_way": more_on_the_way,
+                "new_seller": new_seller,
+                "number_left_in_stock": number_left_in_stock,
+                "number_of_answered_questions": number_of_answered_questions,
+                "number_of_ratings": number_of_ratings,
+                "out_of_stock": out_of_stock,
+                "over_a_thousand_answered_questions": over_a_thousand_answered_questions,
+                "price": price,
+                "primary_delivery_start_date": primary_delivery_start_date,
+                "primary_delivery_end_date": primary_delivery_end_date,
+                "primary_shipping_cost": primary_shipping_cost,
+                "returnable": returnable,
+                "return_until_days": return_until_days,
+                "secondary_delivery_start_date": secondary_delivery_start_date,
+                "secondary_delivery_end_date": secondary_delivery_end_date,
+                "ships_from_amazon": ships_from_amazon,
+                "small_business": small_business,
+                "sold_by_amazon": sold_by_amazon,
+                "subscription_available": subscription_available,
+                "subscribe_for_coupon": subscribe_for_coupon,
+                "undeliverable": undeliverable,
+                "unit": unit,
+                "unit_price": unit_price,
+                "one_star_percentage": one_star_percentage,
+                "two_star_percentage": two_star_percentage,
+                "three_star_percentage": three_star_percentage,
+                "four_star_percentage": four_star_percentage,
+                "five_star_percentage": five_star_percentage,
             },
             index=[0],
         )
@@ -544,20 +552,12 @@ def parse_product_pages(
     product_pages_folder,
     product_results_file,
     best_seller_results_file,
-    category_results_file,
-    max_products=10**6,
+    category_results_file
 ):
     product_rows = []
     best_seller_rows = []
     category_rows = []
-    for index, product_filename in enumerate(get_filenames(product_pages_folder)):
-        if index >= max_products:
-            break
-
-        print(product_filename)
-        # all digits
-        if not (re.fullmatch(r".*\-sellers", product_filename) is None):
-            continue
+    for product_filename in get_filenames(product_pages_folder):
 
         try:
             parse_product_page(
@@ -569,11 +569,6 @@ def parse_product_pages(
             )
         except Exception as exception:
             webbrowser.open(path.join(product_pages_folder, product_filename + ".html"))
-            sellers_file = path.join(
-                product_pages_folder, product_filename + "-sellers.html"
-            )
-            if path.isfile(sellers_file):
-                webbrowser.open(sellers_file)
             raise exception
 
     concat(product_rows, ignore_index=True).to_csv(product_results_file, index=False)
