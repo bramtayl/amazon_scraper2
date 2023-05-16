@@ -194,7 +194,10 @@ def save_product_pages(
 
     # no previous product, so starts empty
     # url = product_url_data.loc[:, "url"][0]
-    for product_id, product_url in zip(search_results_data.loc[:, "product_id"], search_results_data.loc[:, "product_url"]):
+    for product_id, product_url in zip(
+        search_results_data.loc[:, "product_id"],
+        search_results_data.loc[:, "product_url"],
+    ):
         # don't save a product we already have
         if product_id in completed_product_filenames:
             continue
@@ -246,7 +249,7 @@ def save_product_pages(
                 print(product_url)
                 print("Timeout, skipping")
                 continue
-    
+
     browser.close()
     browser_box.clear()
 

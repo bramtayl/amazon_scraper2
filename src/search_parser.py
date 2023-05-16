@@ -44,7 +44,7 @@ def parse_search_result(search_id, search_result, index):
     ).set_index("search_id")
 
 
-class DuplicateProductFilenames(Exception):
+class DuplicateProductIds(Exception):
     pass
 
 
@@ -66,6 +66,10 @@ def parse_search_page(search_pages_folder, search_id):
     )
 
 
+class DuplicateProductUrls(Exception):
+    pass
+
+
 def parse_search_pages(search_pages_folder):
     search_results = concat(
         (
@@ -74,10 +78,15 @@ def parse_search_pages(search_pages_folder):
         )
     )
 
-    if len(set(search_results.loc[:, "product_url"])) != len(
-        set(search_results.loc[:, "product_id"])
-    ):
-        raise DuplicateProductFilenames()
+    product_urls = search_results.loc[:, "product_url"]
+    product_ids = search_results.loc[:, "product_id"]
+    unique_product_urls = set(product_urls)
+
+    if len(product_urls) != len(unique_product_urls):
+        raise DuplicateProductUrls()
+
+    if len(unique_product_urls) != len(set(product_ids)):
+        raise DuplicateProductIds()
 
     return search_results
 

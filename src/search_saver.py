@@ -169,8 +169,6 @@ def save_search_pages(
         query_data.loc[:, "query"],
         query_data.loc[:, "search_id"],
     ):
-        search_id = department + "-" + query
-
         # don't rerun a query we already ran
         if search_id in completed_search_ids:
             continue
@@ -221,7 +219,7 @@ def save_search_pages(
             print("Went wrong, skipping")
             # we need to go back to amazon so we can keep searching
             go_to_amazon(browser)
-        
+
     browser.close()
     browser_box.clear()
 

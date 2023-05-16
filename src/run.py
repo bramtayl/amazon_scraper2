@@ -63,13 +63,9 @@ for browser in browser_box:
     browser.close()
 
 (product_data, category_data, best_seller_data) = parse_product_pages(
-    search_results_data,
-    product_pages_folder,
-    product_logs_folder,
-    CURRENT_YEAR
+    search_results_data, product_pages_folder, product_logs_folder, CURRENT_YEAR
 )
 
 product_data.to_csv(path.join(products_folder, "products.csv"))
 category_data.to_csv(path.join(products_folder, "categories.csv"), index=False)
 best_seller_data.to_csv(path.join(products_folder, "best_sellers.csv"), index=False)
-

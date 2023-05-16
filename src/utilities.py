@@ -109,8 +109,8 @@ def save_soup(page, junk_selectors, filename):
         if is_empty_div(div):
             div.extract()
 
-    with open(filename, "w", encoding="UTF-8") as file:
-        file.write(page.prettify())
+    with open(filename, "w", encoding="UTF-8") as io:
+        io.write(page.prettify())
 
 
 def wait_for_amazon(browser):
@@ -152,31 +152,31 @@ def wait_for_amazon(browser):
         raise an_error
 
 
-def remove_one_empty(soup):
-    for tag in soup.children:
-        if not isinstance(tag, Tag) and tag == "":
-            tag.extract()
+def remove_empty_string(soup):
+    for child in soup.children:
+        if not isinstance(child, Tag) and child == "":
+            child.extract()
             return False
 
     return True
 
 
-def remove_recusive_empty(soup):
-    for tag in soup.children:
-        if isinstance(tag, Tag):
-            remove_recusive_empty(tag)
+def remove_whitespace(soup):
+    for child in soup.children:
+        if isinstance(child, Tag):
+            remove_whitespace(child)
         else:
-            tag.replace_with(tag.strip())
+            child.replace_with(child.strip())
 
     done = False
     while not done:
-        done = remove_one_empty(soup)
+        done = remove_empty_string(soup)
 
 
 def read_html(file):
-    with open(file, "r", encoding="UTF-8") as file:
-        soup = BeautifulSoup(file, "lxml", from_encoding="UTF-8")
-        remove_recusive_empty(soup)
+    with open(file, "r", encoding="UTF-8") as io:
+        soup = BeautifulSoup(io, "lxml", from_encoding="UTF-8")
+        remove_whitespace(soup)
         return soup
 
 
@@ -190,4 +190,3 @@ def get_valid_filename(name):
 def maybe_create(folder):
     if not path.isdir(folder):
         mkdir(folder)
-    return folder

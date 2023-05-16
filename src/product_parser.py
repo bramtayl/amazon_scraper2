@@ -347,9 +347,7 @@ def parse_product_page(
     four_star_percent = None
     five_star_text = None
 
-    product_page = read_html(
-        path.join(product_pages_folder, product_id + ".html")
-    )
+    product_page = read_html(path.join(product_pages_folder, product_id + ".html"))
 
     # return without doing anything for a variety of non-standard product pages
     unsupported_browser_widgets = product_page.select("h2.heading.title")
@@ -494,9 +492,7 @@ def parse_product_page(
         # if there are more than one, for the first bullet, exclude other bullets inside it
         if len(bullet_best_seller_links) > 1 and index == 0:
             best_seller_rows.append(
-                parse_bestseller_rank(
-                    product_id, best_seller_widget.contents[2], index
-                )
+                parse_bestseller_rank(product_id, best_seller_widget.contents[2], index)
             )
         else:
             best_seller_rows.append(
@@ -667,7 +663,9 @@ def parse_product_page(
     )
 
 
-def parse_product_pages(search_results_data, product_pages_folder, product_logs_folder, current_year):
+def parse_product_pages(
+    search_results_data, product_pages_folder, product_logs_folder, current_year
+):
     product_rows = []
     category_rows = []
     best_seller_rows = []
@@ -685,15 +683,18 @@ def parse_product_pages(search_results_data, product_pages_folder, product_logs_
             webbrowser.open(path.join(product_pages_folder, product_id + ".html"))
             raise exception
 
-
     return (
         # take the rearch results data
-        search_results_data.set_index("product_id").join(
+        search_results_data.set_index("product_id")
+        .join(
             # add in product data
-            concat(product_rows), how="left"
-        ).join(
+            concat(product_rows),
+            how="left",
+        )
+        .join(
             # add in product logs
-            combine_folder_csvs(product_logs_folder, "product_id"), how="left"
+            combine_folder_csvs(product_logs_folder, "product_id"),
+            how="left",
         ),
         concat(category_rows, ignore_index=True),
         concat(best_seller_rows, ignore_index=True),
