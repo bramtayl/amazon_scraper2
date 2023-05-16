@@ -110,7 +110,7 @@ def save_search_page(
     # the CSS selector is for all the parts we don't need
     # save the page to the folder
     save_soup(
-        BeautifulSoup(browser.page_source, "lxml"),
+        BeautifulSoup(browser.page_source.encode('utf-8'), "lxml", from_encoding="UTF-8"),
         SEARCH_JUNK_SELECTORS,
         path.join(search_pages_folder, search_id + ".html"),
     )

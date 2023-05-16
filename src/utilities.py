@@ -1,4 +1,4 @@
-from bs4 import BeautifulSoup, Comment
+from bs4 import BeautifulSoup, Comment, Tag
 from os import listdir, path
 import re
 from pandas import concat, DataFrame, read_csv
@@ -116,7 +116,7 @@ def save_soup(page, junk_selectors, filename):
         if is_empty_div(div):
             div.extract()
 
-    with open(filename, "w") as file:
+    with open(filename, "w", encoding='UTF-8') as file:
         file.write(page.prettify())
 
 
@@ -158,14 +158,36 @@ def wait_for_amazon(browser):
 
         raise an_error
 
+def remove_one_empty(soup):
+    for tag in soup.children:
+        if not isinstance(tag, Tag) and tag == "":
+            tag.extract()
+            return False
+    
+    return True
+
+
+def remove_recusive_empty(soup):
+    for tag in soup.children:
+        if isinstance(tag, Tag):
+            remove_recusive_empty(tag)
+        else:
+            tag.replace_with(tag.strip())
+    
+    done = False
+    while not done:
+        done = remove_one_empty(soup)            
+
 
 def read_html(file):
-    with open(file, "r") as file:
-        return BeautifulSoup(file, "lxml")
+    with open(file, "r", encoding='UTF-8') as file:
+        soup = BeautifulSoup(file, "lxml", from_encoding="UTF-8")
+        remove_recusive_empty(soup)
+        return soup
 
 
 # stole from https://github.com/django/django/blob/main/django/utils/text.py
 def get_valid_filename(name):
     # replace spaces with underscores
     # remove anything that is not an alphanumeric, dash, underscore, or dot
-    return re.sub(r"(?u)[^-\w.]", "", name.replace(" ", "_"))[1:150]
+    return re.sub(r"(?u)[^-\w.]", "", name.replace(" ", "_"))[0:150]

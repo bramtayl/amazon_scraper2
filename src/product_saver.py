@@ -89,7 +89,7 @@ def save_product_page(
     product_filename = get_valid_filename(product_url)
 
     DataFrame(
-        {"product_url": product_url, "datetime": datetime.now()}, index=[0]
+        {"product_filename": product_filename, "datetime": datetime.now()}, index=[0]
     ).to_csv(path.join(product_logs_folder, product_filename + ".csv"), index=False)
 
     wait_for_amazon(browser)
@@ -139,11 +139,12 @@ def save_product_page(
         )
 
     save_soup(
-        BeautifulSoup(browser.page_source, "lxml"),
+        BeautifulSoup(
+            browser.page_source.encode("utf-8"), "lxml", from_encoding="UTF-8"
+        ),
         PRODUCT_JUNK_SELECTORS,
         path.join(product_pages_folder, product_filename + ".html"),
     )
-    print(product_filename)
 
     # if we have to pick a seller, save a second page with the seller list
     choose_seller_buttons = browser.find_elements(
@@ -160,18 +161,22 @@ def save_product_page(
 
         # save the second page
         save_soup(
-            browser.page_source,
+            BeautifulSoup(
+                browser.page_source.encode("utf-8"), "lxml", from_encoding="UTF-8"
+            ),
             PRODUCT_JUNK_SELECTORS,
             path.join(product_pages_folder, product_filename + "-sellers.html"),
         )
+
 
 def reclean_product_pages(product_pages_folder):
     for file in listdir(product_pages_folder):
         save_soup(
             read_html(path.join(product_pages_folder, file)),
             PRODUCT_JUNK_SELECTORS,
-            file
+            file,
         )
+
 
 def save_product_pages(
     browser_box,

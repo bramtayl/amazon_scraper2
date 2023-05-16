@@ -4,7 +4,7 @@ from src.utilities import get_filenames, get_valid_filename, only, read_html
 
 
 # index = 0
-# file = open(path.join(search_pages_folder, search_id + ".html"), "r")
+# file = open(path.join(search_pages_folder, search_id + ".html"), "r", encoding='UTF-8')
 # search_result = read_html(search_pages_folder, search_id).select("div.s-main-slot.s-result-list > div[data-component-type='s-search-result']")[index]
 # file.close()
 def parse_search_result(search_id, search_result, index):
