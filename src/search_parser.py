@@ -36,12 +36,12 @@ def parse_search_result(search_id, search_result, index):
             "rank": index + 1,
             "product_url": product_url,
             "sponsored": sponsored,
-            "product_filename": get_valid_filename(product_url),
+            "product_id": get_valid_filename(product_url),
             "amazon_brand": amazon_brand,
         },
         # one row
-        index=range(1),
-    )
+        index=[0],
+    ).set_index("search_id")
 
 
 class DuplicateProductFilenames(Exception):
@@ -62,8 +62,7 @@ def parse_search_page(search_pages_folder, search_id):
                     )
                 )
             )
-        ),
-        ignore_index=True,
+        )
     )
 
 
@@ -72,12 +71,11 @@ def parse_search_pages(search_pages_folder):
         (
             parse_search_page(search_pages_folder, search_id)
             for search_id in get_filenames(search_pages_folder)
-        ),
-        ignore_index=True,
+        )
     )
 
     if len(set(search_results.loc[:, "product_url"])) != len(
-        set(search_results.loc[:, "product_filename"])
+        set(search_results.loc[:, "product_id"])
     ):
         raise DuplicateProductFilenames()
 

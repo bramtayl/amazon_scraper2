@@ -1,7 +1,7 @@
 from os import listdir, path
 from pandas import concat, DataFrame
 import re
-from src.utilities import get_filenames, only, read_html
+from src.utilities import combine_folder_csvs, get_filenames, only, read_html
 import webbrowser
 from datetime import date
 
@@ -21,8 +21,8 @@ def get_star_percent(histogram_row):
 # debugging function for finding particular product pages
 def find_products(product_pages_folder, a_function, number_of_products=5):
     found = 0
-    for product_filename in listdir(product_pages_folder):
-        product_file = path.join(product_pages_folder, product_filename)
+    for product_id in listdir(product_pages_folder):
+        product_file = path.join(product_pages_folder, product_id)
         product_page = read_html(product_file)
         if a_function(product_page):
             webbrowser.open(product_file)
@@ -46,15 +46,15 @@ class NotOneOrTwoPrices(Exception):
     pass
 
 
-def parse_bestseller_rank(product_filename, best_seller_widget, index):
+def parse_bestseller_rank(product_id, best_seller_widget, index):
     return DataFrame(
         {
             "order": index + 1,
-            "product_filename": product_filename,
+            "product_id": product_id,
             "best_seller_text": best_seller_widget.text,
         },
         index=[0],
-    )
+    ).set_index("product_id")
 
 
 def remove_commas(a_string):
@@ -302,7 +302,7 @@ def parse_product_page(
     category_rows,
     best_seller_rows,
     product_pages_folder,
-    product_filename,
+    product_id,
     current_year,
 ):
     # add defaults for all our variables
@@ -348,7 +348,7 @@ def parse_product_page(
     five_star_text = None
 
     product_page = read_html(
-        path.join(product_pages_folder, product_filename + ".html")
+        path.join(product_pages_folder, product_id + ".html")
     )
 
     # return without doing anything for a variety of non-standard product pages
@@ -397,10 +397,10 @@ def parse_product_page(
                     # +1 for 1 based indexing
                     "order": index + 1,
                     "category": category_widget.text,
-                    "product_filename": product_filename,
+                    "product_id": product_id,
                 },
                 index=[0],
-            )
+            ).set_index("product_id")
         )
 
     answered_questions_widgets = product_page.select("a#askATFLink span.a-size-base")
@@ -479,7 +479,7 @@ def parse_product_page(
     ):
         # the parent of the best seller link is the best seller row
         best_seller_rows.append(
-            parse_bestseller_rank(product_filename, best_seller_link.parent, index)
+            parse_bestseller_rank(product_id, best_seller_link.parent, index)
         )
 
     # bullet details
@@ -495,12 +495,12 @@ def parse_product_page(
         if len(bullet_best_seller_links) > 1 and index == 0:
             best_seller_rows.append(
                 parse_bestseller_rank(
-                    product_filename, best_seller_widget.contents[2], index
+                    product_id, best_seller_widget.contents[2], index
                 )
             )
         else:
             best_seller_rows.append(
-                parse_bestseller_rank(product_filename, best_seller_widget, index)
+                parse_bestseller_rank(product_id, best_seller_widget, index)
             )
 
     ratings_widgets = product_page.select("span.cr-widget-TitleRatingsHistogram")
@@ -632,7 +632,7 @@ def parse_product_page(
                 "hidden_prices": hidden_prices,
                 "limited_stock": limited_stock,
                 "list_price": list_price,
-                "product_filename": product_filename,
+                "product_id": product_id,
                 "new_seller": new_seller,
                 "non_returnable_text": non_returnable_text,
                 "number_of_ratings": number_of_ratings,
@@ -663,30 +663,38 @@ def parse_product_page(
                 "five_star_text": five_star_text,
             },
             index=[0],
-        )
+        ).set_index("product_id")
     )
 
 
-def parse_product_pages(product_pages_folder, current_year):
+def parse_product_pages(search_results_data, product_pages_folder, product_logs_folder, current_year):
     product_rows = []
     category_rows = []
     best_seller_rows = []
-    for product_filename in get_filenames(product_pages_folder):
+    for product_id in get_filenames(product_pages_folder):
         try:
             parse_product_page(
                 product_rows,
                 best_seller_rows,
                 category_rows,
                 product_pages_folder,
-                product_filename,
+                product_id,
                 current_year,
             )
         except Exception as exception:
-            webbrowser.open(path.join(product_pages_folder, product_filename + ".html"))
+            webbrowser.open(path.join(product_pages_folder, product_id + ".html"))
             raise exception
 
+
     return (
-        concat(product_rows, ignore_index=True),
+        # take the rearch results data
+        search_results_data.set_index("product_id").join(
+            # add in product data
+            concat(product_rows), how="left"
+        ).join(
+            # add in product logs
+            combine_folder_csvs(product_logs_folder, "product_id"), how="left"
+        ),
         concat(category_rows, ignore_index=True),
         concat(best_seller_rows, ignore_index=True),
     )

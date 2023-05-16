@@ -1,5 +1,5 @@
 from bs4 import BeautifulSoup, Comment, Tag
-from os import listdir, path
+from os import listdir, mkdir, path
 import re
 from pandas import concat, DataFrame, read_csv
 from selenium import webdriver
@@ -72,20 +72,13 @@ def new_browser(user_agent, fakespot=False):
     return browser
 
 
-# pandas concat seems to want all the dataframe keys to be in the same order
-# so sort them first
-def sorted_dataframe(dictionary):
-    the_keys = list(dictionary.keys())
-    the_keys.sort()
-    sorted_dict = {key: dictionary[key] for key in the_keys}
-    return DataFrame(sorted_dict, index=[0])
-
-
 # combine all the csvs in a folder into a dataframe
-def combine_folder_csvs(folder):
+def combine_folder_csvs(folder, index_column):
     return concat(
-        (read_csv(path.join(folder, file)) for file in listdir(folder)),
-        ignore_index=True,
+        (
+            read_csv(path.join(folder, file)).set_index(index_column)
+            for file in listdir(folder)
+        )
     )
 
 
@@ -116,7 +109,7 @@ def save_soup(page, junk_selectors, filename):
         if is_empty_div(div):
             div.extract()
 
-    with open(filename, "w", encoding='UTF-8') as file:
+    with open(filename, "w", encoding="UTF-8") as file:
         file.write(page.prettify())
 
 
@@ -158,12 +151,13 @@ def wait_for_amazon(browser):
 
         raise an_error
 
+
 def remove_one_empty(soup):
     for tag in soup.children:
         if not isinstance(tag, Tag) and tag == "":
             tag.extract()
             return False
-    
+
     return True
 
 
@@ -173,14 +167,14 @@ def remove_recusive_empty(soup):
             remove_recusive_empty(tag)
         else:
             tag.replace_with(tag.strip())
-    
+
     done = False
     while not done:
-        done = remove_one_empty(soup)            
+        done = remove_one_empty(soup)
 
 
 def read_html(file):
-    with open(file, "r", encoding='UTF-8') as file:
+    with open(file, "r", encoding="UTF-8") as file:
         soup = BeautifulSoup(file, "lxml", from_encoding="UTF-8")
         remove_recusive_empty(soup)
         return soup
@@ -191,3 +185,9 @@ def get_valid_filename(name):
     # replace spaces with underscores
     # remove anything that is not an alphanumeric, dash, underscore, or dot
     return re.sub(r"(?u)[^-\w.]", "", name.replace(" ", "_"))[0:150]
+
+
+def maybe_create(folder):
+    if not path.isdir(folder):
+        mkdir(folder)
+    return folder

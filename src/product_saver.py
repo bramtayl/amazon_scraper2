@@ -77,6 +77,7 @@ PRODUCT_JUNK_SELECTORS = [
 # product_url = search_results_data.loc[:, "product_url"][0]
 def save_product_page(
     browser,
+    product_id,
     product_url,
     product_logs_folder,
     product_pages_folder,
@@ -86,11 +87,11 @@ def save_product_page(
     else:
         browser.get("https://www.amazon.com" + product_url)
 
-    product_filename = get_valid_filename(product_url)
-
     DataFrame(
-        {"product_filename": product_filename, "datetime": datetime.now()}, index=[0]
-    ).to_csv(path.join(product_logs_folder, product_filename + ".csv"), index=False)
+        {"product_id": product_id, "datetime": datetime.now()}, index=[0]
+    ).set_index("product_id").to_csv(
+        path.join(product_logs_folder, product_id + ".csv")
+    )
 
     wait_for_amazon(browser)
     try:
@@ -143,7 +144,7 @@ def save_product_page(
             browser.page_source.encode("utf-8"), "lxml", from_encoding="UTF-8"
         ),
         PRODUCT_JUNK_SELECTORS,
-        path.join(product_pages_folder, product_filename + ".html"),
+        path.join(product_pages_folder, product_id + ".html"),
     )
 
     # if we have to pick a seller, save a second page with the seller list
@@ -165,7 +166,7 @@ def save_product_page(
                 browser.page_source.encode("utf-8"), "lxml", from_encoding="UTF-8"
             ),
             PRODUCT_JUNK_SELECTORS,
-            path.join(product_pages_folder, product_filename + "-sellers.html"),
+            path.join(product_pages_folder, product_id + "-sellers.html"),
         )
 
 
@@ -180,7 +181,7 @@ def reclean_product_pages(product_pages_folder):
 
 def save_product_pages(
     browser_box,
-    product_urls,
+    search_results_data,
     product_logs_folder,
     product_pages_folder,
     user_agents,
@@ -193,14 +194,15 @@ def save_product_pages(
 
     # no previous product, so starts empty
     # url = product_url_data.loc[:, "url"][0]
-    for product_url in product_urls:
+    for product_id, product_url in zip(search_results_data.loc[:, "product_id"], search_results_data.loc[:, "product_url"]):
         # don't save a product we already have
-        if get_valid_filename(product_url) in completed_product_filenames:
+        if product_id in completed_product_filenames:
             continue
 
         try:
             save_product_page(
                 browser,
+                product_id,
                 product_url,
                 product_logs_folder,
                 product_pages_folder,
@@ -217,6 +219,8 @@ def save_product_pages(
             print("Timeout, skipping")
             continue
         except FoiledAgainError:
+            browser.close()
+            browser_box.clear()
             # if Amazon sends a captcha, change the user agent and try again
             user_agent_index = user_agent_index + 1
             # start again if we're at the end
@@ -227,6 +231,7 @@ def save_product_pages(
             try:
                 save_product_page(
                     browser,
+                    product_id,
                     product_url,
                     product_logs_folder,
                     product_pages_folder,
@@ -241,5 +246,8 @@ def save_product_pages(
                 print(product_url)
                 print("Timeout, skipping")
                 continue
+    
+    browser.close()
+    browser_box.clear()
 
     return user_agent_index

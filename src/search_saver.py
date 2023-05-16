@@ -10,6 +10,7 @@ from selenium.webdriver.support.ui import Select
 FOLDER = "/home/brandon/amazon_scraper"
 chdir(FOLDER)
 from src.utilities import (
+    combine_folder_csvs,
     FoiledAgainError,
     get_filenames,
     new_browser,
@@ -28,6 +29,7 @@ def find_department_option_index(browser, department):
         if option.text == department:
             return index
     raise Exception("Department " + department + " not found!")
+
 
 SEARCH_JUNK_SELECTORS = [
     "map",
@@ -103,14 +105,16 @@ def save_search_page(
     wait_for_amazon(browser)
 
     # save a log with the time we ran the query
-    DataFrame({"query": [query], "datetime": [datetime.now()]}).to_csv(
-        path.join(search_logs_folder, search_id + ".csv"), index=False
-    )
+    DataFrame(
+        {"search_id": search_id, "datetime": datetime.now()}, index=[0]
+    ).set_index("search_id").to_csv(path.join(search_logs_folder, search_id + ".csv"))
 
     # the CSS selector is for all the parts we don't need
     # save the page to the folder
     save_soup(
-        BeautifulSoup(browser.page_source.encode('utf-8'), "lxml", from_encoding="UTF-8"),
+        BeautifulSoup(
+            browser.page_source.encode("utf-8"), "lxml", from_encoding="UTF-8"
+        ),
         SEARCH_JUNK_SELECTORS,
         path.join(search_pages_folder, search_id + ".html"),
     )
@@ -127,13 +131,13 @@ def go_to_amazon(browser):
         browser.get(url)
         wait_for_amazon(browser)
 
+
 def reclean_search_pages(search_pages_folder):
     for file in listdir(search_pages_folder):
         save_soup(
-            read_html(path.join(search_pages_folder, file)),
-            SEARCH_JUNK_SELECTORS,
-            file
+            read_html(path.join(search_pages_folder, file)), SEARCH_JUNK_SELECTORS, file
         )
+
 
 def save_search_pages(
     browser_box,
@@ -150,11 +154,20 @@ def save_search_pages(
 
     go_to_amazon(browser)
 
+    query_data["search_id"] = [
+        department + "-" + query
+        for (department, query) in zip(
+            query_data.loc[:, "department"], query_data.loc[:, "query"]
+        )
+    ]
+
     # empty because there was no previous searched query
     # query = "chemistry textbook"
     # department = "Books"
-    for department, query in zip(
-        query_data.loc[:, "department"], query_data.loc[:, "query"]
+    for department, query, search_id in zip(
+        query_data.loc[:, "department"],
+        query_data.loc[:, "query"],
+        query_data.loc[:, "search_id"],
     ):
         search_id = department + "-" + query
 
@@ -172,6 +185,8 @@ def save_search_pages(
                 search_pages_folder,
             )
         except FoiledAgainError:
+            browser.close()
+            browser_box.clear()
             # if Amazon sends a captcha, change the user agent and try again
             user_agent_index = user_agent_index + 1
             # start again if we're at the end
@@ -206,5 +221,14 @@ def save_search_pages(
             print("Went wrong, skipping")
             # we need to go back to amazon so we can keep searching
             go_to_amazon(browser)
+        
+    browser.close()
+    browser_box.clear()
 
-    return user_agent_index
+    return (
+        # add the search logs to the query data to make search data
+        query_data.set_index("search_id").join(
+            combine_folder_csvs(search_logs_folder, "search_id"), how="left"
+        ),
+        user_agent_index,
+    )
