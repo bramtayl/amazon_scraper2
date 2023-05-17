@@ -41,7 +41,7 @@ def parse_search_result(search_id, search_result, index):
         },
         # one row
         index=[0],
-    ).set_index("search_id")
+    ).set_index("product_id")
 
 
 class DuplicateProductIds(Exception):
@@ -79,7 +79,7 @@ def parse_search_pages(search_pages_folder):
     )
 
     product_urls = search_results.loc[:, "product_url"]
-    product_ids = search_results.loc[:, "product_id"]
+    product_ids = search_results.index
     unique_product_urls = set(product_urls)
 
     if len(product_urls) != len(unique_product_urls):

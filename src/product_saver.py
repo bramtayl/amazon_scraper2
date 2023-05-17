@@ -10,7 +10,6 @@ from selenium.webdriver.support.expected_conditions import (
 from selenium.webdriver.support.wait import WebDriverWait as wait
 from src.utilities import (
     FoiledAgainError,
-    get_valid_filename,
     GoneError,
     get_filenames,
     new_browser,
@@ -74,7 +73,7 @@ PRODUCT_JUNK_SELECTORS = [
 ]
 
 
-# product_url = search_results_data.loc[:, "product_url"][0]
+# product_url = product_url_data.loc[:, "product_url"][0]
 def save_product_page(
     browser,
     product_id,
@@ -147,29 +146,6 @@ def save_product_page(
         path.join(product_pages_folder, product_id + ".html"),
     )
 
-    # if we have to pick a seller, save a second page with the seller list
-    choose_seller_buttons = browser.find_elements(
-        By.CSS_SELECTOR,
-        box_prefix + "a[title='See All Buying Options']",
-    )
-
-    if len(choose_seller_buttons) > 0:
-        # open the seller list
-        only(choose_seller_buttons).click()
-
-        # wait for the seller list to load
-        wait(browser, WAIT_TIME).until(located((By.CSS_SELECTOR, "#aod-offer-list")))
-
-        # save the second page
-        save_soup(
-            BeautifulSoup(
-                browser.page_source.encode("utf-8"), "lxml", from_encoding="UTF-8"
-            ),
-            PRODUCT_JUNK_SELECTORS,
-            path.join(product_pages_folder, product_id + "-sellers.html"),
-        )
-
-
 def reclean_product_pages(product_pages_folder):
     for file in listdir(product_pages_folder):
         save_soup(
@@ -181,7 +157,7 @@ def reclean_product_pages(product_pages_folder):
 
 def save_product_pages(
     browser_box,
-    search_results_data,
+    product_url_data,
     product_logs_folder,
     product_pages_folder,
     user_agents,
@@ -195,8 +171,8 @@ def save_product_pages(
     # no previous product, so starts empty
     # url = product_url_data.loc[:, "url"][0]
     for product_id, product_url in zip(
-        search_results_data.loc[:, "product_id"],
-        search_results_data.loc[:, "product_url"],
+        product_url_data.loc[:, "product_id"],
+        product_url_data.loc[:, "product_url"],
     ):
         # don't save a product we already have
         if product_id in completed_product_filenames:

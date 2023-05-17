@@ -190,3 +190,12 @@ def get_valid_filename(name):
 def maybe_create(folder):
     if not path.isdir(folder):
         mkdir(folder)
+
+class RegexError(Exception):
+    pass
+
+def strict_match(regex, text):
+    match = re.fullmatch(regex, text)
+    if match == None:
+        raise RegexError(text)
+    return match
