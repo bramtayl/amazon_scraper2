@@ -1,7 +1,7 @@
 from bs4 import BeautifulSoup, Comment, Tag
 from os import listdir, mkdir, path
 import re
-from pandas import concat, DataFrame, read_csv
+from pandas import concat, read_csv
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By

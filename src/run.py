@@ -1,3 +1,4 @@
+import lucene
 from os import path
 from pandas import read_csv
 from src.utilities import maybe_create
@@ -5,6 +6,7 @@ from src.search_saver import save_search_pages
 from src.search_parser import parse_search_pages
 from src.product_saver import save_product_pages
 from src.product_parser import parse_product_pages
+from src.relevance import index_product_pages, get_relevance_data
 
 CURRENT_YEAR = 2023
 
@@ -34,6 +36,9 @@ product_pages_folder = path.join(products_folder, "pages")
 maybe_create(product_pages_folder)
 
 product_urls_file = path.join(products_folder, "product_url_data.csv")
+
+lucene_folder = path.join(products_folder, "lucene")
+maybe_create(lucene_folder)
 
 browser_box = []
 user_agent_index = 1
@@ -66,7 +71,14 @@ user_agent_index = save_product_pages(
     product_url_data, product_pages_folder, product_logs_folder, CURRENT_YEAR
 )
 
-
 product_data.to_csv(path.join(products_folder, "products.csv"))
 category_data.to_csv(path.join(products_folder, "categories.csv"))
 best_seller_data.to_csv(path.join(products_folder, "best_sellers.csv"))
+
+lucene.initVM(vmargs=["-Djava.awt.headless=true"])
+
+index_product_pages(lucene_folder, product_pages_folder, product_url_data.index)
+
+get_relevance_data(lucene_folder, query_data.loc[:, "query"]).to_csv(
+    path.join(products_folder, "relevance.csv"), index = False
+)
