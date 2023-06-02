@@ -1,0 +1,185 @@
+---
+title: "Shadow price"
+output:
+  html_document
+---
+
+```{r, setup}
+knitr::opts_knit$set(root.dir = '/home/brandon/amazon_scraper')
+```
+
+I looked into running a ordinal regression with rstan, nested within each search.
+Unfortunately, I don't think that is feasible.
+The rank transformation is discrete, and removes too much information.
+
+So instead, I transformed rankings (with 1 being the best) to negative log rankings.
+I did this both for search rankings and best seller rankings.
+I logged because the difference between the top few spots matters most.
+I used the negative value to make interpretation easier.
+A negative log ranking that is larger, that is, closer to 0, is "better", that is, closer to the #1 spot.
+
+First, I predicted the negative log best seller rank.
+Here, I added random effects for the best seller category.
+
+```{r}
+library(readr)
+library(dplyr, warn.conflicts = FALSE)
+library(Matrix)
+library(lme4)
+library(pander)
+
+product_data <-
+    read_csv("results/products/products.csv", show_col_types = FALSE) %>%
+    mutate(
+        log_unit_price = ifelse(unit_price > 0, log(unit_price), NA)
+    ) %>%
+    inner_join(
+        read_csv(
+            "results/products/product_url_data.csv",
+            show_col_types = FALSE
+        ) %>%
+            rename(search_rank = rank),
+        by = "product_id"
+    ) %>%
+    inner_join(
+        read_csv("inputs/queries.csv", show_col_types = FALSE) %>%
+            mutate(search_id = paste0(department, "-", query)),
+        by = "search_id"
+    ) %>%
+    inner_join(
+        read_csv(
+            "results/products/best_sellers.csv",
+            show_col_types = FALSE
+        ) %>%
+            # use the best seller rank from the most general category
+            filter(order == 1) %>%
+            mutate(
+                negative_log_best_seller_rank = -log(best_seller_rank)
+            ),
+        by = "product_id"
+    ) %>%
+    inner_join(
+        read_csv(
+            "results/products/relevance.csv",
+            show_col_types = FALSE
+        ) %>%
+            # normalize this for easier interpretation
+            mutate(scaled_relevance_score = scale(score)),
+        by = c("product_id", "query")
+    )
+
+best_seller_rank_model <- lmer(
+    negative_log_best_seller_rank ~
+        average_rating +
+        climate_friendly +
+        free_returns +
+        log_unit_price +
+        small_business +
+        subscription_available +
+
+        (1 | best_seller_category),
+    data = product_data
+)
+
+summary(product_data)
+```
+
+Second, I predicted the negative log search rank.
+I used the negative log best seller rank as one predictor.
+Here, I added random effects for the search.
+
+```{r}
+complete_search_data <-
+    product_data %>%
+    select(
+        # same predictors we used for best seller rank
+        # these mostly have indirect effects, but control for them anyways
+        average_rating,
+        climate_friendly,
+        free_returns,
+        log_unit_price,
+        small_business,
+        subscription_available,
+
+        # these predictors have direct effects on search rankings
+        amazon_brand,
+        negative_log_best_seller_rank,
+        scaled_relevance_score,
+        sponsored,
+
+        # outcome
+        search_rank,
+        # random effect
+        search_id,
+    ) %>%
+    filter(complete.cases(.)) %>%
+    arrange(search_id, search_rank) %>%
+    group_by(search_id) %>%
+    mutate(negative_log_search_rank = -log(seq_len(n()))) %>%
+    ungroup()
+
+search_rank_model <- lmer(
+    negative_log_search_rank ~
+        average_rating +
+        climate_friendly +
+        free_returns +
+        log_unit_price +
+        small_business +
+        subscription_available +
+
+        amazon_brand +
+        negative_log_best_seller_rank +
+        scaled_relevance_score +
+        sponsored +
+
+        (1 | search_id),
+    data = complete_search_data
+)
+
+summary(search_rank_model)
+```
+
+Amazon seems to mostly ignore product characteristics when ranking search results.
+Instead, Amazon just uses sales data, and sales in turn are affected by product characteristics.
+
+```{r}
+get_shadow_price_interval <- function(
+    best_seller_rank_model,
+    search_rank_model,
+    scale_factor,
+    number_of_simulations = 10000,
+    alpha = 0.025
+) {
+    search_coefficients <- summary(search_rank_model)$coefficients
+    best_seller_coefficients <- summary(best_seller_rank_model)$coefficients
+    quantile(
+        -(
+            best_seller_coefficients["log_unit_price", "Estimate"] +
+            rnorm(number_of_simulations) *
+            best_seller_coefficients["log_unit_price", "Std. Error"] /
+            sqrt(scale_factor)
+        ) * (
+            search_coefficients["negative_log_best_seller_rank", "Estimate"] +
+            rnorm(number_of_simulations) *
+            search_coefficients[
+                "negative_log_best_seller_rank",
+                "Std. Error"
+            ] / 
+            sqrt(scale_factor)
+        ) /
+        (
+            search_coefficients["sponsoredTRUE", "Estimate"] +
+            rnorm(number_of_simulations) *
+            search_coefficients["sponsoredTRUE", "Std. Error"] /
+            sqrt(scale_factor)
+        ),
+        probs = c(alpha, 1 - alpha)
+    )
+}
+
+pander(get_shadow_price_interval(best_seller_rank_model, search_rank_model, 1))
+```
+
+```{r}
+pander(get_shadow_price_interval(best_seller_rank_model, search_rank_model, 20))
+```

@@ -195,7 +195,7 @@ def parse_buybox(buybox, current_year):
     rush_shipping_date_start = None
     rush_shipping_date_end = None
     ships_from_amazon = False
-    sold_by_amazon = None
+    sold_by_amazon = False
     standard_shipping_conditional = False
     standard_shipping_cost = None
     standard_shipping_date_start = None
@@ -346,7 +346,7 @@ def parse_product_page(
     amazons_choice = False
     average_rating = None
     climate_friendly = False
-    coupon_amount = 0.0
+    coupon_amount = None
     coupon_percent = None
     fakespot_ranking = None
     free_prime_shipping = False
@@ -355,7 +355,7 @@ def parse_product_page(
     limited_stock = False
     list_price = None
     new_seller = False
-    number_of_ratings = None
+    number_of_ratings = 0
     out_of_stock = False
     price = None
     refurbished = False
@@ -630,8 +630,11 @@ def parse_product_page(
     if unit_price is None:
         unit_price = price
     # convert coupon percents to a coupon amount
-    if not (coupon_percent is None or price is None):
-        coupon_amount = coupon_percent / 100 * price
+    if (coupon_amount is None):
+        if not (coupon_percent is None or price is None):
+            coupon_amount = coupon_percent / 100 * price
+        else:
+            coupon_amount = 0.0
     # if no end date, the date range is 0, and the end date is the start date
     if standard_shipping_date_end is None:
         standard_shipping_date_end = standard_shipping_date_start
@@ -687,9 +690,7 @@ def parse_product_page(
     )
 
 
-def parse_product_pages(
-    product_url_data, product_pages_folder, product_logs_folder, current_year
-):
+def parse_product_pages(product_pages_folder, current_year):
     product_rows = []
     category_rows = []
     best_seller_rows = []
@@ -710,15 +711,7 @@ def parse_product_pages(
 
     return (
         # take the rearch results data
-        product_url_data.join(
-            # add in product data
-            concat(product_rows),
-            how="left",
-        ).join(
-            # add in product logs
-            combine_folder_csvs(product_logs_folder, "product_id"),
-            how="left",
-        ),
+        concat(product_rows),
         concat(category_rows),
         concat(best_seller_rows),
     )

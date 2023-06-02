@@ -1,7 +1,7 @@
 import lucene
 from os import path
 from pandas import read_csv
-from src.utilities import maybe_create
+from src.utilities import maybe_create, combine_folder_csvs
 from src.search_saver import save_search_pages
 from src.search_parser import parse_search_pages
 from src.product_saver import save_product_pages
@@ -67,8 +67,12 @@ user_agent_index = save_product_pages(
     user_agent_index=user_agent_index,
 )
 
+combine_folder_csvs(product_logs_folder, "product_id").to_csv(
+    path.join(products_folder, "product_logs.csv")
+)
+
 (product_data, category_data, best_seller_data) = parse_product_pages(
-    product_url_data, product_pages_folder, product_logs_folder, CURRENT_YEAR
+    product_pages_folder, CURRENT_YEAR
 )
 
 product_data.to_csv(path.join(products_folder, "products.csv"))
