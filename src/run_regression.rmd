@@ -81,7 +81,7 @@ best_seller_rank_model <- lmer(
     data = product_data
 )
 
-summary(product_data)
+summary(best_seller_rank_model)
 ```
 
 Second, I predicted the negative log search rank.
