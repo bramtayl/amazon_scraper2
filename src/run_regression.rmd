@@ -142,11 +142,53 @@ summary(search_rank_model)
 Amazon seems to mostly ignore product characteristics when ranking search results.
 Instead, Amazon just uses sales data, and sales in turn are affected by product characteristics.
 
+Now, calculate a shadow price.
+
+$$-\log(\text{best_seller_rank}) = \beta_1 \log(\text{unit_price}) + \ldots$$
+
+Implicitly derive
+
+$$- \frac{1}{\text{best_seller_rank}} d(\text{best_seller_rank}) = \beta_1 \frac{1}{\text{unit_price}} d(\text{unit_price}) + \ldots$$
+
+So
+
+$$\frac{\partial(\text{best_seller_rank})}{\partial(\text{unit_price})} = - \beta_1 \frac{\text{best_seller_rank}}{\text{unit_price}}$$
+
+Now look at search rank.
+
+$$-\log(\text{search_rank}) = \gamma_1 \text{sponsored} + \gamma_2 (-\log(\text{best_seller_rank})) + \ldots$$
+
+Implicitly derive
+
+$$- \frac{1}{\text{search_rank}} d(\text{search_rank}) = \gamma_1 d(\text{sponsored}) - \gamma_2 \frac{1}{\text{best_seller_rank}} d(\text{best_seller_rank}) + \ldots$$
+
+So
+ 
+$$\frac{\partial (\text{search_rank})}{\partial (\text{sponsored})} = - \gamma_1 \text{search_rank}$$
+
+$$\frac{\partial (\text{search_rank})}{\partial (\text{best_seller_rank})} = \gamma_2 \frac{\text{search_rank}}{\text{best_seller_rank}}$$
+
+Use the chain rule
+
+$$\frac{\partial (\text{search_rank})}{\partial (\text{unit_price})} =  \frac{\partial (\text{search_rank})}{\partial (\text{best_seller_rank})} \frac{\partial(\text{best_seller_rank})}{\partial(\text{unit_price})} = -\beta_1 \gamma_2 \frac{\text{search_rank}}{\text{unit_price}}$$
+
+Finally, here is the shadow price:
+
+$$-\frac{ \frac{\partial \text{search_rank}}{\partial \text{sponsored}}}{ \frac{\partial (\text{search_rank})}{\partial (\text{unit_price})}} = - \frac{\beta_1 \gamma_2}{\gamma_1} \text{unit_price}$$
+
+Since the shadow price is proportional to price, I will use the term shadow "proportion" to refer to this proportion.
+
+Here, I ran a mini-simulation to calculate a confidence interval for the shadow proportion.
+
+The standard error of coefficients should be roughly proportional to the square root of the number of samples.
+
+First, I'll simulate the confidence interval with the existing standard errors.
+
 ```{r}
-get_shadow_price_interval <- function(
+get_shadow_interval  <- function(
     best_seller_rank_model,
     search_rank_model,
-    scale_factor,
+    scale_factor = 1,
     number_of_simulations = 10000,
     alpha = 0.025
 ) {
@@ -177,9 +219,17 @@ get_shadow_price_interval <- function(
     )
 }
 
-pander(get_shadow_price_interval(best_seller_rank_model, search_rank_model, 1))
+pander(get_shadow_interval (best_seller_rank_model, search_rank_model))
 ```
 
+This is saying that the shadow price of sponsorship is between 3.3% and 6.6% of the price of the product.
+
+This seems comparatively small; we could probably argue that Amazon is ripping off its sellers.
+
+If we collect 10X more data, this is roughly the size of the confidence interval we can expect:
+
 ```{r}
-pander(get_shadow_price_interval(best_seller_rank_model, search_rank_model, 20))
+pander(get_shadow_interval (best_seller_rank_model, search_rank_model, scale_factor = 10))
 ```
+
+That seems probably sufficient?
