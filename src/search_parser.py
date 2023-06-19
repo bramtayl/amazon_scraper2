@@ -1,13 +1,13 @@
 from os import path
 from pandas import concat, DataFrame
-from src.utilities import get_filenames, get_valid_filename, only, read_html
+from src.utilities import get_filenames, only, read_html
 
 
 # index = 0
-# file = open(path.join(search_pages_folder, search_id + ".html"), "r", encoding='UTF-8')
-# search_result = read_html(search_pages_folder, search_id).select("div.s-main-slot.s-result-list > div[data-component-type='s-search-result']")[index]
+# file = open(path.join(search_pages_folder, query + ".html"), "r", encoding='UTF-8')
+# search_result = read_html(search_pages_folder, query).select("div.s-main-slot.s-result-list > div[data-component-type='s-search-result']")[index]
 # file.close()
-def parse_search_result(search_id, search_result, index):
+def parse_search_result(query, search_result, index):
     sponsored = False
     sponsored_tags = search_result.select(
         "a[aria-label='View Sponsored information or leave ad feedback']"
@@ -32,34 +32,25 @@ def parse_search_result(search_id, search_result, index):
 
     return DataFrame(
         {
-            "search_id": search_id,
-            "rank": index + 1,
-            "product_url": product_url,
-            "sponsored": sponsored,
-            "product_id": get_valid_filename(product_url),
-            "amazon_brand": amazon_brand,
-        },
-        # one row
-        index=[0],
-    ).set_index("product_id")
+            "query": [query],
+            "rank": [index + 1],
+            "product_url": [product_url],
+            "sponsored": [sponsored],
+            "amazon_brand": [amazon_brand],
+        }
+    )
 
 
-class DuplicateProductIds(Exception):
-    pass
-
-
-def parse_search_page(search_pages_folder, search_id):
+def parse_search_page(search_pages_folder, query):
     return concat(
-        (
-            parse_search_result(search_id, search_result, index)
-            for index, search_result in enumerate(
-                read_html(path.join(search_pages_folder, search_id + ".html")).select(
-                    ", ".join(
-                        [
-                            "div.s-main-slot.s-result-list > div[data-component-type='s-search-result']",
-                            "div.s-main-slot.s-result-list > div[cel_widget_id*='MAIN-VIDEO_SINGLE_PRODUCT']",
-                        ]
-                    )
+        parse_search_result(query, search_result, index)
+        for index, search_result in enumerate(
+            read_html(path.join(search_pages_folder, query + ".html")).select(
+                ", ".join(
+                    [
+                        "div.s-main-slot.s-result-list > div[data-component-type='s-search-result']",
+                        "div.s-main-slot.s-result-list > div[cel_widget_id*='MAIN-VIDEO_SINGLE_PRODUCT']",
+                    ]
                 )
             )
         )
@@ -71,24 +62,7 @@ class DuplicateProductUrls(Exception):
 
 
 def parse_search_pages(search_pages_folder):
-    search_results = concat(
-        (
-            parse_search_page(search_pages_folder, search_id)
-            for search_id in get_filenames(search_pages_folder)
-        )
+    return concat(
+        parse_search_page(search_pages_folder, query)
+        for query in get_filenames(search_pages_folder)
     )
-
-    product_urls = search_results.loc[:, "product_url"]
-    product_ids = search_results.index
-    unique_product_urls = set(product_urls)
-
-    if len(product_urls) != len(unique_product_urls):
-        raise DuplicateProductUrls()
-
-    if len(unique_product_urls) != len(set(product_ids)):
-        raise DuplicateProductIds()
-
-    return search_results
-
-
-# TODO: why did painkillers get cut off?

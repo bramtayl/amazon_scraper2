@@ -1,7 +1,12 @@
-from os import listdir, path
+from os import path
 from pandas import concat, DataFrame
 import re
-from src.utilities import combine_folder_csvs, get_filenames, only, read_html, strict_match
+from src.utilities import (
+    get_filenames,
+    only,
+    read_html,
+    strict_match,
+)
 import webbrowser
 from datetime import date
 
@@ -16,19 +21,6 @@ def get_star_percent(histogram_row):
             r"(\d)+%", only(histogram_row.select("td.a-text-right")).text
         ).group(1)
     )
-
-
-# debugging function for finding particular product pages
-def find_products(product_pages_folder, a_function, number_of_products=5):
-    found = 0
-    for product_id in listdir(product_pages_folder):
-        product_file = path.join(product_pages_folder, product_id)
-        product_page = read_html(product_file)
-        if a_function(product_page):
-            webbrowser.open(product_file)
-            found = found + 1
-            if found == number_of_products:
-                break
 
 
 # error if there aren't rows for each of 1-5 stars
@@ -121,45 +113,39 @@ def parse_list_price(pricebox):
 
     return None
 
+
 # product_id = "Fossil-Quartz-Stainless-Steel-ChronographdpB009LSKPYIrefsr_1_51keywordswatchesformenqid1684247239sr8-51"
 # product_page = read_html(path.join(product_pages_folder, product_id + ".html"))
 # best_seller_link = product_page.select("div#detailBulletsWrapper_feature_div a[href*='/gp/bestsellers/']")[0]
-def parse_best_seller_links(best_seller_rows, product_id, best_seller_links, skip_header = False):
-    for index, best_seller_link in enumerate(best_seller_links):
-        if index == 0 and skip_header:
-            content_index = 1
-        else:
-            content_index = 0
+def parse_best_seller_link(
+    best_seller_link, skip_header=False
+):
+    if skip_header:
+        content_index = 1
+    else:
+        content_index = 0
 
-        # the parent of the best seller link is the best seller widget
-        best_seller_widget = best_seller_link.parent
+    # the parent of the best seller link is the best seller widget
+    best_seller_widget = best_seller_link.parent
 
-        if "See Top 100 in" in best_seller_widget.text:
-            # e.g. #1 in Category (See Top 100 in [Category](url))
-            # or #1 Free in Kindle Store (See Top 100 in [Kindle Store](url))
-            match = strict_match(
-                r"#([\d,]+) (?:Free )?in (.*) \(", best_seller_widget.contents[content_index].text
-            )
-            rank_text = match.group(1)
-            category_text = match.group(2)
-        else:
-            # e.g. #1 in [Category](url)
-            rank_text = strict_match(
-                r"#([\d,]+) (?:Free )?in", best_seller_widget.contents[content_index].text
-            ).group(1)
-            category_text = best_seller_link.text
-
-        best_seller_rows.append(
-            DataFrame(
-                {
-                    "order": index + 1,
-                    "product_id": product_id,
-                    "best_seller_rank": int(remove_commas(rank_text)),
-                    "best_seller_category": category_text.strip(),
-                },
-                index=[0],
-            ).set_index("product_id")
+    if "See Top 100 in" in best_seller_widget.text:
+        # e.g. #1 in Category (See Top 100 in [Category](url))
+        # or #1 Free in Kindle Store (See Top 100 in [Kindle Store](url))
+        match = strict_match(
+            r"#([\d,]+) (?:Free )?in (.*) \(",
+            best_seller_widget.contents[content_index].text,
         )
+        rank_text = match.group(1)
+        category_text = match.group(2)
+    else:
+        # e.g. #1 in [Category](url)
+        rank_text = strict_match(
+            r"#([\d,]+) (?:Free )?in",
+            best_seller_widget.contents[content_index].text,
+        ).group(1)
+        category_text = best_seller_link.text
+
+    return category_text.strip(), int(remove_commas(rank_text))
 
 
 def parse_coupon(promo_widget):
@@ -200,7 +186,6 @@ def parse_buybox(buybox, current_year):
     standard_shipping_cost = None
     standard_shipping_date_start = None
     standard_shipping_date_end = None
-    temporarily_out_of_stock = False
     undeliverable = False
     unit = "Purchase"
     unit_price = None
@@ -223,14 +208,16 @@ def parse_buybox(buybox, current_year):
         if len(price_widgets) >= 1:
             price = parse_price(price_widgets[0].text)
         if len(price_widgets) >= 2:
-            unit_price = parse_price(price_widgets[1].text)
+            unit_price_widget = price_widgets[1]
+            unit_price = parse_price(unit_price_widget.text)
             unit = (
                 strict_match(
                     # e.g "/ Fl Oz )"
                     r"\/(.*)\)",
-                    only(price_pair_widget.select("span#taxInclusiveMessage + span"))
-                    .contents[2]
-                    .text,
+                    # parent the price and offscreen price
+                    # parent of that includes the unit
+                    # first paren is child 0, price is child 1, unit and close paren is child 2
+                    unit_price_widget.parent.parent.contents[2].text
                 )
                 .group(1)
                 .strip()
@@ -247,12 +234,7 @@ def parse_buybox(buybox, current_year):
         "div[data-csa-c-content-id='desktop_buybox_group_1'] div#availability > span:first-of-type"
     )
     if availability_widgets:
-        availability_text = only(availability_widgets).text
-        if "Temporarily out of stock" in availability_text:
-            temporarily_out_of_stock = True
-        if re.search(
-            r"Only ([\d\,]+) left in stock", availability_text
-        ):
+        if re.search(r"Only ([\d\,]+) left in stock", only(availability_widgets).text):
             limited_stock = True
 
     free_returns_widgets = buybox.select("a#creturns-policy-anchor-text")
@@ -276,14 +258,6 @@ def parse_buybox(buybox, current_year):
             standard_shipping_cost = parse_price(standard_shipping_cost_text)
         if standard_shipping_widget["data-csa-c-delivery-condition"] != "":
             standard_shipping_conditional = True
-
-    rush_shipping_widgets = buybox.select(
-        "div#mir-layout-DELIVERY_BLOCK-slot-SECONDARY_DELIVERY_MESSAGE_LARGE > span[data-csa-c-content-id*='DEXUnified']"
-    )
-    if rush_shipping_widgets:
-        (rush_shipping_date_start, rush_shipping_date_end) = parse_dates(
-            only(rush_shipping_widgets)["data-csa-c-delivery-time"], current_year
-        )
 
     ships_from_widgets = buybox.select(
         "div.tabular-buybox-text[tabular-attribute-name='Ships from']"
@@ -325,18 +299,15 @@ def parse_buybox(buybox, current_year):
         standard_shipping_cost,
         standard_shipping_date_start,
         standard_shipping_date_end,
-        temporarily_out_of_stock,
         undeliverable,
         unit_price,
         unit,
     )
 
-# product_id = "Fossil-Quartz-Stainless-Steel-ChronographdpB009LSKPYIrefsr_1_51keywordswatchesformenqid1684247239sr8-51"
-# product_page = read_html(path.join(product_pages_folder, product_id + ".html"))
+# product_rows = []
+# product_id = get_filenames(product_pages_folder)[0]
 def parse_product_page(
     product_rows,
-    category_rows,
-    best_seller_rows,
     product_pages_folder,
     product_id,
     current_year,
@@ -345,13 +316,15 @@ def parse_product_page(
     answered_questions = 0
     amazons_choice = False
     average_rating = None
+    best_seller_category = ""
+    best_seller_rank = None
+    category = ""
     climate_friendly = False
     coupon_amount = None
     coupon_percent = None
     fakespot_ranking = None
     free_prime_shipping = False
     free_returns = False
-    hidden_prices = False
     limited_stock = False
     list_price = None
     new_seller = False
@@ -371,11 +344,9 @@ def parse_product_page(
     standard_shipping_date_end = None
     subscription_available = False
     subscribe_coupon = False
-    temporarily_out_of_stock = False
     undeliverable = False
     unit = "Purchase"
     unit_price = None
-    used_only = False
 
     one_star_percent = None
     two_star_percent = None
@@ -405,37 +376,16 @@ def parse_product_page(
     # this is heading that contains the product department
     # if the heading is missing, it's not really a product
     # like a link to the Amazon music player, etc.
-    product_type_widgets = product_page.select("div#dp")
-    if not product_type_widgets:
+    department_widgets = product_page.select("div#dp")
+    if not department_widgets:
         return
 
-    product_department = only(product_type_widgets)["class"][0]
+    department = only(department_widgets)["class"][0]
 
-    used_only_widgets = product_page.select("div#usedOnlyBuybox")
-    if used_only_widgets:
-        only(used_only_widgets)
-        used_only = True
-
-    refurbished_options = product_page.select(
-        "div#buyBoxAccordion > div[id*='renewed']"
-    )
-    if refurbished_options:
-        refurbished = True
-
-    for index, category_widget in enumerate(
-        product_page.select("div#wayfinding-breadcrumbs_feature_div a")
-    ):
-        category_rows.append(
-            DataFrame(
-                {
-                    # +1 for 1 based indexing
-                    "order": index + 1,
-                    "category": category_widget.text,
-                    "product_id": product_id,
-                },
-                index=[0],
-            ).set_index("product_id")
-        )
+    category_widgets = product_page.select("div#wayfinding-breadcrumbs_feature_div a")
+    if category_widgets:
+        # just get the broadest category
+        category = category_widgets[0].text
 
     answered_questions_widgets = product_page.select("a#askATFLink span.a-size-base")
     if answered_questions_widgets:
@@ -496,30 +446,23 @@ def parse_product_page(
                 promo_widget
             )
 
-    hidden_price_widgets = product_page.select(
-        "a[href='/forum/where%20is%20the%20price']"
+    table_best_seller_links = product_page.select(
+        "div#prodDetails a[href*='/gp/bestsellers']"
     )
-    if hidden_price_widgets:
-        only(hidden_price_widgets)
-        hidden_prices = True
 
-    # table details
-    parse_best_seller_links(
-        best_seller_rows,
-        product_id,
-        product_page.select("div#prodDetails a[href*='/gp/bestsellers']"),
-    )
-    
-    # bullet details
-    # skip_header for "Best Seller Rank" text
-    parse_best_seller_links(
-        best_seller_rows,
-        product_id,
-        product_page.select(
+    if len(table_best_seller_links) > 0:
+        # table details
+        best_seller_category, best_seller_rank = parse_best_seller_link(
+            table_best_seller_links[0]
+        )
+    else:
+        bullet_best_seller_links = product_page.select(
             "div#detailBulletsWrapper_feature_div a[href*='/gp/bestsellers/']"
-        ),
-        skip_header=True,
-    )
+        )
+        if bullet_best_seller_links:
+            best_seller_category, best_seller_rank = parse_best_seller_link(
+                bullet_best_seller_links[0], True
+            )
 
     ratings_widgets = product_page.select("span.cr-widget-TitleRatingsHistogram")
     if ratings_widgets:
@@ -587,7 +530,6 @@ def parse_product_page(
             standard_shipping_cost,
             standard_shipping_date_start,
             standard_shipping_date_end,
-            temporarily_out_of_stock,
             undeliverable,
             unit_price,
             unit,
@@ -613,7 +555,6 @@ def parse_product_page(
                 standard_shipping_cost,
                 standard_shipping_date_start,
                 standard_shipping_date_end,
-                temporarily_out_of_stock,
                 undeliverable,
                 unit_price,
                 unit,
@@ -630,7 +571,7 @@ def parse_product_page(
     if unit_price is None:
         unit_price = price
     # convert coupon percents to a coupon amount
-    if (coupon_amount is None):
+    if coupon_amount is None:
         if not (coupon_percent is None or price is None):
             coupon_amount = coupon_percent / 100 * price
         else:
@@ -644,62 +585,58 @@ def parse_product_page(
     product_rows.append(
         DataFrame(
             {
-                "answered_questions": answered_questions,
-                "amazons_choice": amazons_choice,
-                "average_rating": average_rating,
-                "climate_friendly": climate_friendly,
-                "coupon_amount": coupon_amount,
-                "fakespot_ranking": fakespot_ranking,
-                "free_prime_shipping": free_prime_shipping,
-                "free_returns": free_returns,
-                "hidden_prices": hidden_prices,
-                "limited_stock": limited_stock,
-                "list_price": list_price,
-                "product_id": product_id,
-                "new_seller": new_seller,
-                "number_of_ratings": number_of_ratings,
-                "out_of_stock": out_of_stock,
-                "price": price,
-                "product_department": product_department,
-                "refurbished": refurbished,
-                "return_within_days": return_within_days,
-                "rush_shipping_date_start": rush_shipping_date_start,
-                "rush_shipping_date_end": rush_shipping_date_end,
-                "ships_from_amazon": ships_from_amazon,
-                "small_business": small_business,
-                "sold_by_amazon": sold_by_amazon,
-                "standard_shipping_cost": standard_shipping_cost,
-                "standard_shipping_conditional": standard_shipping_conditional,
-                "standard_shipping_date_start": standard_shipping_date_start,
-                "standard_shipping_date_end": standard_shipping_date_end,
-                "subscribe_coupon": subscribe_coupon,
-                "subscription_available": subscription_available,
-                "temporarily_out_of_stock": temporarily_out_of_stock,
-                "undeliverable": undeliverable,
-                "unit": unit,
-                "unit_price": unit_price,
-                "used_only": used_only,
-                "one_star_percent": one_star_percent,
-                "two_star_percent": two_star_percent,
-                "three_star_percent": three_star_percent,
-                "four_star_percent": four_star_percent,
-                "five_star_percent": five_star_percent,
+                "answered_questions": [answered_questions],
+                "amazons_choice": [amazons_choice],
+                "average_rating": [average_rating],
+                "best_seller_rank": [best_seller_rank],
+                "best_seller_category": [best_seller_category],
+                "category": [category],
+                "climate_friendly": [climate_friendly],
+                "coupon_amount": [coupon_amount],
+                "fakespot_ranking": [fakespot_ranking],
+                "free_prime_shipping": [free_prime_shipping],
+                "free_returns": [free_returns],
+                "limited_stock": [limited_stock],
+                "list_price": [list_price],
+                "product_id": [product_id],
+                "new_seller": [new_seller],
+                "number_of_ratings": [number_of_ratings],
+                "out_of_stock": [out_of_stock],
+                "price": [price],
+                "department": [department],
+                "refurbished": [refurbished],
+                "return_within_days": [return_within_days],
+                "rush_shipping_date_start": [rush_shipping_date_start],
+                "rush_shipping_date_end": [rush_shipping_date_end],
+                "ships_from_amazon": [ships_from_amazon],
+                "small_business": [small_business],
+                "sold_by_amazon": [sold_by_amazon],
+                "standard_shipping_cost": [standard_shipping_cost],
+                "standard_shipping_conditional": [standard_shipping_conditional],
+                "standard_shipping_date_start": [standard_shipping_date_start],
+                "standard_shipping_date_end": [standard_shipping_date_end],
+                "subscribe_coupon": [subscribe_coupon],
+                "subscription_available": [subscription_available],
+                "undeliverable": [undeliverable],
+                "unit": [unit],
+                "unit_price": [unit_price],
+                "one_star_percent": [one_star_percent],
+                "two_star_percent": [two_star_percent],
+                "three_star_percent": [three_star_percent],
+                "four_star_percent": [four_star_percent],
+                "five_star_percent": [five_star_percent],
             },
-            index=[0],
-        ).set_index("product_id")
+        )
     )
 
-
+# current_year = "CURRENT_YEAR"
 def parse_product_pages(product_pages_folder, current_year):
     product_rows = []
-    category_rows = []
-    best_seller_rows = []
+    # product_id = get_filenames(product_pages_folder)[0]
     for product_id in get_filenames(product_pages_folder):
         try:
             parse_product_page(
                 product_rows,
-                category_rows,
-                best_seller_rows,
                 product_pages_folder,
                 product_id,
                 current_year,
@@ -709,9 +646,4 @@ def parse_product_pages(product_pages_folder, current_year):
             webbrowser.open(path.join(product_pages_folder, product_id + ".html"))
             raise exception
 
-    return (
-        # take the rearch results data
-        concat(product_rows),
-        concat(category_rows),
-        concat(best_seller_rows),
-    )
+    return concat(product_rows)

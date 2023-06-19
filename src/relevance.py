@@ -13,27 +13,26 @@ from org.apache.lucene.queryparser.classic import QueryParser
 from org.apache.lucene.search import IndexSearcher
 from org.apache.lucene.store import NIOFSDirectory
 from pandas import concat, DataFrame
+from src.utilities import get_filenames
 
 
-def index_product_pages(lucene_folder, product_pages_folder, product_ids):
+def index_product_pages(lucene_folder, product_pages_folder):
     writer = IndexWriter(
         NIOFSDirectory(Paths.get(lucene_folder)), IndexWriterConfig(StandardAnalyzer())
     )
-    for product_id in product_ids:
-        product_file = path.join(product_pages_folder, product_id + ".html")
-        if path.isfile(product_file):
-            print(product_id)
-            doc = Document()
-            doc.add(Field("product_id", product_id, StringField.TYPE_STORED))
-            with open(product_file, "r", encoding="UTF-8") as io:
-                doc.add(
-                    Field(
-                        "product_text",
-                        BeautifulSoup(io, "lxml", from_encoding="UTF-8").text,
-                        TextField.TYPE_STORED,
-                    )
+    for product_id in get_filenames(product_pages_folder):
+        print(product_id)
+        doc = Document()
+        doc.add(Field("product_id", product_id, StringField.TYPE_STORED))
+        with open(path.join(product_pages_folder, product_id + ".html"), "r", encoding="UTF-8") as io:
+            doc.add(
+                Field(
+                    "product_text",
+                    BeautifulSoup(io, "lxml", from_encoding="UTF-8").prettify(),
+                    TextField.TYPE_STORED,
                 )
-            writer.addDocument(doc)
+            )
+        writer.addDocument(doc)
     writer.commit()
     writer.close()
 
@@ -52,11 +51,10 @@ def get_relevance_data(lucene_folder, queries):
             results.append(
                 DataFrame(
                     {
-                        "query": query,
-                        "product_id": searcher.doc(score_data.doc)["product_id"],
-                        "score": score_data.score,
-                    },
-                    index=[0],
+                        "query": [query],
+                        "product_id": [searcher.doc(score_data.doc)["product_id"]],
+                        "score": [score_data.score],
+                    }
                 )
             )
 

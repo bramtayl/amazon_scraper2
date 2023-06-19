@@ -1,4 +1,4 @@
-from bs4 import BeautifulSoup, Comment, Tag
+from bs4 import BeautifulSoup, Comment, NavigableString
 from os import listdir, mkdir, path
 import re
 from pandas import concat, read_csv
@@ -12,11 +12,51 @@ from selenium.webdriver.support.expected_conditions import (
 )
 from selenium.webdriver.support.wait import WebDriverWait as wait
 
+JUNK_SELECTORS = [
+    "map",
+    "meta",
+    "noscript",
+    "script",
+    "style",
+    "svg",
+    "video",
+    "#ad-endcap-1_feature_div",
+    "#ad-display-center-1_feature_div",
+    "#amsDetailRight_feature_div",
+    "#aplusBrandStory_feature_div",
+    "#beautyRecommendations_feature_div",
+    "#discovery-and-inspiration_feature_div",
+    "div#fs-confirm-modal",
+    "div.fs-privacy-notice",
+    "div.fs-trusted-recos",
+    "div#HLCXComparisonWidgetNonTechnical_feature_div",
+    "#dp-ads-center-promo_feature_div",
+    "#dp-ads-center-promo-top_feature_div",
+    "#dp-ads-middle_feature_div",
+    "#gridgetWrapper",
+    "#HLCXComparisonWidget_feature_div",
+    "#imageBlock_feature_div",
+    "#navbar-main",
+    "#navFooter",
+    "#navtop",
+    "#nav-upnav",
+    "#percolate-ui-ilm_div",
+    "#postsSameBrandCard_feature_div",
+    "#product-ads-feedback_feature_div",
+    ".reviews-display-ad",
+    "#similarities_feature_div",
+    "#skiplink",
+    "#storeDisclaimer_feature_div",
+    "#va-related-videos-widget_feature_div",
+    "#valuePick_feature_div",
+    "#sims-themis-sponsored-products-2_feature_div",
+    "#sponsoredProducts2_feature_div",    
+]
+
 # time for timed waits
 WAIT_TIME = 20
 
 FAKESPOT_FILE = "/home/brandon/snap/firefox/common/.mozilla/firefox/0tsz0chl.default/extensions/{44df5123-f715-9146-bfaa-c6e8d4461d44}.xpi"
-
 
 # custom error if amazon stops us with captcha
 class FoiledAgainError(Exception):
@@ -71,6 +111,18 @@ def new_browser(user_agent, fakespot=False):
 
     return browser
 
+def switch_user_agent(browser_box, browser, user_agents, user_agent_index):
+    browser.close()
+    browser_box.clear()
+    # if Amazon sends a captcha, change the user agent and try again
+    if user_agent_index == len(user_agents) - 1:
+        # start again if we're at the end
+        new_user_agent_index = 0
+    else:
+        new_user_agent_index = user_agent_index + 1
+
+    return new_browser(user_agents[new_user_agent_index], fakespot=True), new_user_agent_index
+
 
 # combine all the csvs in a folder into a dataframe
 def combine_folder_csvs(folder, index_column):
@@ -84,34 +136,40 @@ def combine_folder_csvs(folder, index_column):
 
 # get the filenames in a folder, sans file extension
 def get_filenames(folder):
-    return set(path.splitext(filename)[0] for filename in listdir(folder))
-
+    return [path.splitext(filename)[0] for filename in listdir(folder)]
 
 # amazon has a bunch of empty divs reserved for specific cases
 # and empty divs of empty divs
-# sometimes the only text is whitespace that html removes anyway
-# just remove them all
 def is_empty_div(thing):
-    if isinstance(thing, str):
-        # not none means there's only spaces
-        return not (re.match(r"^[\s]+$", thing) is None)
-    if thing.name != "div":
-        return False
-    return all(is_empty_div(child) for child in thing.contents)
+    if thing.name == "div":
+        # empty will return true
+        return all(is_empty_div(child) for child in thing.contents)
+    return False
 
+def remove_whitespace(soup):
+    for text in soup(text=lambda text: isinstance(text, NavigableString)):
+        stripped = text.strip()
+        if stripped == "":
+            text.extract()
+        elif text != stripped:
+            text.replace_with(stripped)
 
-def save_soup(page, junk_selectors, filename):
-    for junk in page.select(", ".join(junk_selectors)):
+# soup = product_page
+def save_browser(browser, filename):
+    soup = BeautifulSoup(
+        browser.page_source.encode("utf-8"), "lxml", from_encoding="UTF-8"
+    )
+    for junk in soup.select(", ".join(JUNK_SELECTORS)):
         junk.extract()
-    for comment in page(text=lambda text: isinstance(text, Comment)):
+    for comment in soup(text=lambda text: isinstance(text, Comment)):
         comment.extract()
-    for div in page.select("div"):
+    remove_whitespace(soup)
+    # only top-level divs
+    for div in soup.select("div"):
         if is_empty_div(div):
             div.extract()
-
     with open(filename, "w", encoding="UTF-8") as io:
-        io.write(page.prettify())
-
+        io.write(soup.prettify())
 
 def wait_for_amazon(browser):
     try:
@@ -150,27 +208,6 @@ def wait_for_amazon(browser):
             raise WentWrongError()
 
         raise an_error
-
-
-def remove_empty_string(soup):
-    for child in soup.children:
-        if not isinstance(child, Tag) and child == "":
-            child.extract()
-            return False
-
-    return True
-
-
-def remove_whitespace(soup):
-    for child in soup.children:
-        if isinstance(child, Tag):
-            remove_whitespace(child)
-        else:
-            child.replace_with(child.strip())
-
-    done = False
-    while not done:
-        done = remove_empty_string(soup)
 
 
 def read_html(file):
