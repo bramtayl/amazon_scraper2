@@ -1,7 +1,7 @@
 import lucene
 from os import path
 from pandas import read_csv
-from src.utilities import maybe_create, get_valid_filename
+from src.utilities import maybe_create
 from src.search_saver import save_search_pages
 from src.search_parser import parse_search_pages
 from src.product_saver import save_product_pages
@@ -40,14 +40,18 @@ user_agent_index = save_search_pages(
     user_agent_index=user_agent_index,
 )
 
-parse_search_pages(search_pages_folder).to_csv(search_data_file, index = False)
+parse_search_pages(search_pages_folder).to_csv(search_data_file, index=False)
 
 search_data = read_csv(search_data_file)
+
 
 class DuplicateASINs(Exception):
     pass
 
-search_data[["ASIN", "url_name"]].drop_duplicates().to_csv(product_url_file, index = False)
+
+search_data[["ASIN", "url_name"]].drop_duplicates().to_csv(
+    product_url_file, index=False
+)
 
 product_url_data = read_csv(product_url_file)
 
@@ -62,9 +66,9 @@ user_agent_index = save_product_pages(
     user_agent_index=user_agent_index,
 )
 
-parse_product_pages(
-    product_pages_folder, CURRENT_YEAR
-).to_csv(path.join(results_folder, "product_data.csv"))
+parse_product_pages(product_pages_folder, CURRENT_YEAR).to_csv(
+    path.join(results_folder, "product_data.csv")
+)
 
 
 lucene.initVM(vmargs=["-Djava.awt.headless=true"])
@@ -72,5 +76,5 @@ lucene.initVM(vmargs=["-Djava.awt.headless=true"])
 index_product_pages(lucene_folder, product_pages_folder)
 
 get_relevance_data(lucene_folder, queries).to_csv(
-    path.join(results_folder, "relevance_data.csv"), index = False
+    path.join(results_folder, "relevance_data.csv"), index=False
 )

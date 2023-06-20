@@ -24,7 +24,9 @@ def index_product_pages(lucene_folder, product_pages_folder):
         print(ASIN)
         doc = Document()
         doc.add(Field("ASIN", ASIN, StringField.TYPE_STORED))
-        with open(path.join(product_pages_folder, ASIN + ".html"), "r", encoding="UTF-8") as io:
+        with open(
+            path.join(product_pages_folder, ASIN + ".html"), "r", encoding="UTF-8"
+        ) as io:
             doc.add(
                 Field(
                     "product_text",

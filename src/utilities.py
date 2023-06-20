@@ -51,13 +51,14 @@ JUNK_SELECTORS = [
     "#va-related-videos-widget_feature_div",
     "#valuePick_feature_div",
     "#sims-themis-sponsored-products-2_feature_div",
-    "#sponsoredProducts2_feature_div",    
+    "#sponsoredProducts2_feature_div",
 ]
 
 # time for timed waits
 WAIT_TIME = 20
 
 FAKESPOT_FILE = "/home/brandon/snap/firefox/common/.mozilla/firefox/0tsz0chl.default/extensions/{44df5123-f715-9146-bfaa-c6e8d4461d44}.xpi"
+
 
 # custom error if amazon stops us with captcha
 class FoiledAgainError(Exception):
@@ -112,6 +113,7 @@ def new_browser(user_agent, fakespot=False):
 
     return browser
 
+
 def switch_user_agent(browser_box, browser, user_agents, user_agent_index):
     browser.close()
     browser_box.clear()
@@ -122,7 +124,10 @@ def switch_user_agent(browser_box, browser, user_agents, user_agent_index):
     else:
         new_user_agent_index = user_agent_index + 1
 
-    return new_browser(user_agents[new_user_agent_index], fakespot=True), new_user_agent_index
+    return (
+        new_browser(user_agents[new_user_agent_index], fakespot=True),
+        new_user_agent_index,
+    )
 
 
 # combine all the csvs in a folder into a dataframe
@@ -139,6 +144,7 @@ def combine_folder_csvs(folder, index_column):
 def get_filenames(folder):
     return [path.splitext(filename)[0] for filename in listdir(folder)]
 
+
 # amazon has a bunch of empty divs reserved for specific cases
 # and empty divs of empty divs
 def is_empty_div(thing):
@@ -147,6 +153,7 @@ def is_empty_div(thing):
         return all(is_empty_div(child) for child in thing.contents)
     return False
 
+
 def remove_whitespace(soup):
     for text in soup(text=lambda text: isinstance(text, NavigableString)):
         stripped = text.strip()
@@ -154,6 +161,7 @@ def remove_whitespace(soup):
             text.extract()
         elif text != stripped:
             text.replace_with(stripped)
+
 
 # soup = product_page
 def save_browser(browser, filename):
@@ -171,6 +179,7 @@ def save_browser(browser, filename):
             div.extract()
     with open(filename, "w", encoding="UTF-8") as io:
         io.write(soup.prettify())
+
 
 def wait_for_amazon(browser):
     try:
@@ -229,8 +238,10 @@ def maybe_create(folder):
     if not path.isdir(folder):
         mkdir(folder)
 
+
 class RegexError(Exception):
     pass
+
 
 def strict_match(regex, text):
     match = re.fullmatch(regex, text)

@@ -36,7 +36,8 @@ def save_product_page(
         # might not be a fakespot grade
         pass
 
-    save_browser(browser,
+    save_browser(
+        browser,
         path.join(product_pages_folder, ASIN + ".html"),
     )
 
@@ -82,7 +83,9 @@ def save_product_pages(
             print("Timeout, skipping")
             continue
         except FoiledAgainError:
-            browser, user_agent_index = switch_user_agent(browser_box, browser, user_agents, user_agent_index)
+            browser, user_agent_index = switch_user_agent(
+                browser_box, browser, user_agents, user_agent_index
+            )
             try:
                 save_product_page(
                     browser,

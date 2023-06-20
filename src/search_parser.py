@@ -4,14 +4,18 @@ import re
 from src.utilities import get_filenames, only, read_html
 import urllib
 
+
 class NoASINError(Exception):
     pass
 
+
 URL_PATTERN = r".*\/([^\/]*)\/dp\/([^/]*)\/"
+
 
 def clean_url(url_match):
     return (url_match.group(1), url_match.group(2))
-    
+
+
 # index = 0
 # file = open(path.join(search_pages_folder, query + ".html"), "r", encoding='UTF-8')
 # search_result = read_html(search_pages_folder, query).select("div.s-main-slot.s-result-list > div[data-component-type='s-search-result']")[index]

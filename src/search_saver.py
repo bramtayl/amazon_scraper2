@@ -16,6 +16,7 @@ from src.utilities import (
     WentWrongError,
 )
 
+
 # query = "fire hd 10 tablet"
 # browser = new_browser(user_agents[0], fakespot = True)
 # go_to_amazon(browser)
@@ -25,7 +26,6 @@ def save_search_page(
     query,
     search_pages_folder,
 ):
-
     search_bar = only(browser.find_elements(By.CSS_SELECTOR, "#twotabsearchtextbox"))
 
     search_bar.clear()
@@ -53,7 +53,6 @@ def go_to_amazon(browser):
         # sometimes Amazon loads an abbreviated homepage without the full search bar
         browser.get(url)
         wait_for_amazon(browser)
-
 
 
 def save_search_pages(
@@ -85,7 +84,9 @@ def save_search_pages(
                 search_pages_folder,
             )
         except FoiledAgainError:
-            browser, user_agent_index = switch_user_agent(browser_box, browser, user_agents, user_agent_index)
+            browser, user_agent_index = switch_user_agent(
+                browser_box, browser, user_agents, user_agent_index
+            )
             go_to_amazon(browser)
 
             try:
