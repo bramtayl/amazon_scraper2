@@ -1,6 +1,6 @@
 import lucene
 from os import path
-from pandas import DataFrame, read_csv
+from pandas import read_csv
 from src.utilities import maybe_create, get_valid_filename
 from src.search_saver import save_search_pages
 from src.search_parser import parse_search_pages
@@ -44,22 +44,15 @@ parse_search_pages(search_pages_folder).to_csv(search_data_file, index = False)
 
 search_data = read_csv(search_data_file)
 
-class DuplicateProductIds(Exception):
+class DuplicateASINs(Exception):
     pass
 
-product_urls = list(set(search_data.loc[:, "product_url"]))
-product_ids = [get_valid_filename(product_url) for product_url in product_urls]
-if len(set(product_ids)) != len(product_urls):
-    raise DuplicateProductIds()
-
-DataFrame(
-    {
-        "product_url": product_urls,
-        "product_id": product_ids
-    },
-).to_csv(product_url_file, index = False)
+search_data[["ASIN", "url_name"]].drop_duplicates().to_csv(product_url_file, index = False)
 
 product_url_data = read_csv(product_url_file)
+
+if len(set(product_url_data.loc[:, "ASIN"])) != product_url_data.shape[0]:
+    raise DuplicateASINs()
 
 user_agent_index = save_product_pages(
     browser_box,
