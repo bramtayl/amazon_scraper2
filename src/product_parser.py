@@ -114,8 +114,8 @@ def parse_list_price(pricebox):
     return None
 
 
-# product_id = "Fossil-Quartz-Stainless-Steel-ChronographdpB009LSKPYIrefsr_1_51keywordswatchesformenqid1684247239sr8-51"
-# product_page = read_html(path.join(product_pages_folder, product_id + ".html"))
+# ASIN = "Fossil-Quartz-Stainless-Steel-ChronographdpB009LSKPYIrefsr_1_51keywordswatchesformenqid1684247239sr8-51"
+# product_page = read_html(path.join(product_pages_folder, ASIN + ".html"))
 # best_seller_link = product_page.select("div#detailBulletsWrapper_feature_div a[href*='/gp/bestsellers/']")[0]
 def parse_best_seller_link(
     best_seller_link, skip_header=False
@@ -305,11 +305,11 @@ def parse_buybox(buybox, current_year):
     )
 
 # product_rows = []
-# product_id = get_filenames(product_pages_folder)[0]
+# ASIN = get_filenames(product_pages_folder)[0]
 def parse_product_page(
     product_rows,
     product_pages_folder,
-    product_id,
+    ASIN,
     current_year,
 ):
     # add defaults for all our variables
@@ -354,7 +354,7 @@ def parse_product_page(
     four_star_percent = None
     five_star_percent = None
 
-    product_page = read_html(path.join(product_pages_folder, product_id + ".html"))
+    product_page = read_html(path.join(product_pages_folder, ASIN + ".html"))
 
     # return without doing anything for a variety of non-standard product pages
     unsupported_browser_widgets = product_page.select("h2.heading.title")
@@ -598,7 +598,7 @@ def parse_product_page(
                 "free_returns": [free_returns],
                 "limited_stock": [limited_stock],
                 "list_price": [list_price],
-                "product_id": [product_id],
+                "ASIN": [ASIN],
                 "new_seller": [new_seller],
                 "number_of_ratings": [number_of_ratings],
                 "out_of_stock": [out_of_stock],
@@ -632,18 +632,18 @@ def parse_product_page(
 # current_year = "CURRENT_YEAR"
 def parse_product_pages(product_pages_folder, current_year):
     product_rows = []
-    # product_id = get_filenames(product_pages_folder)[0]
-    for product_id in get_filenames(product_pages_folder):
+    # ASIN = get_filenames(product_pages_folder)[0]
+    for ASIN in get_filenames(product_pages_folder):
         try:
             parse_product_page(
                 product_rows,
                 product_pages_folder,
-                product_id,
+                ASIN,
                 current_year,
             )
         except Exception as exception:
-            print("Error: ", product_id)
-            webbrowser.open(path.join(product_pages_folder, product_id + ".html"))
+            print("Error: ", ASIN)
+            webbrowser.open(path.join(product_pages_folder, ASIN + ".html"))
             raise exception
 
     return concat(product_rows)

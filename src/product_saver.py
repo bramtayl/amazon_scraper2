@@ -20,14 +20,11 @@ from src.utilities import (
 # product_url = product_url_data.loc[:, "product_url"][0]
 def save_product_page(
     browser,
-    product_id,
-    product_url,
+    ASIN,
+    url_name,
     product_pages_folder,
 ):
-    if product_url.startswith("http"):
-        browser.get(product_url)
-    else:
-        browser.get("https://www.amazon.com" + product_url)
+    browser.get("https://www.amazon.com/" + url_name + "/dp/" + ASIN)
 
     wait_for_amazon(browser)
     try:
@@ -40,7 +37,7 @@ def save_product_page(
         pass
 
     save_browser(browser,
-        path.join(product_pages_folder, product_id + ".html"),
+        path.join(product_pages_folder, ASIN + ".html"),
     )
 
 
@@ -58,30 +55,30 @@ def save_product_pages(
 
     # no previous product, so starts empty
     # product_url = product_url_data.loc[:, "url"][0]
-    for product_id, product_url in zip(
-        product_url_data.loc[:, "product_id"],
-        product_url_data.loc[:, "product_url"],
+    for ASIN, url_name in zip(
+        product_url_data.loc[:, "ASIN"],
+        product_url_data.loc[:, "url_name"],
     ):
         # don't save a product we already have
-        if product_id in completed_product_filenames:
+        if ASIN in completed_product_filenames:
             continue
 
         try:
             save_product_page(
                 browser,
-                product_id,
-                product_url,
+                ASIN,
+                url_name,
                 product_pages_folder,
             )
         except GoneError:
             # if the product is gone, print some debug information, and just continue
-            print(product_url)
+            print(url_name + "/dp/" + ASIN)
             print("Page no longer exists, skipping")
             continue
         except TimeoutException:
             # if the product times out, print some debug information, and just continue
             # come back to get it later
-            print(product_url)
+            print(url_name + "/dp/" + ASIN)
             print("Timeout, skipping")
             continue
         except FoiledAgainError:
@@ -89,18 +86,18 @@ def save_product_pages(
             try:
                 save_product_page(
                     browser,
-                    product_id,
-                    product_url,
+                    ASIN,
+                    url_name,
                     product_pages_folder,
                 )
             # hande the errors above again, except for the FoiledAgain error
             # if there's still a captcha this time, just give up
             except GoneError:
-                print(product_url)
+                print(url_name + "/dp/" + ASIN)
                 print("Page no longer exists, skipping")
                 continue
             except TimeoutException:
-                print(product_url)
+                print(url_name + "/dp/" + ASIN)
                 print("Timeout, skipping")
                 continue
 

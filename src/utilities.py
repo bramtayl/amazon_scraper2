@@ -13,6 +13,7 @@ from selenium.webdriver.support.expected_conditions import (
 from selenium.webdriver.support.wait import WebDriverWait as wait
 
 JUNK_SELECTORS = [
+    "iframe",
     "map",
     "meta",
     "noscript",
@@ -221,7 +222,7 @@ def read_html(file):
 def get_valid_filename(name):
     # replace spaces with underscores
     # remove anything that is not an alphanumeric, dash, underscore, or dot
-    return re.sub(r"(?u)[^-\w.]", "", name.replace(" ", "_"))[0:150]
+    return name.replace("/", "%2F")
 
 
 def maybe_create(folder):

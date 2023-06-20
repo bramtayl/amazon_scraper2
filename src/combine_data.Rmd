@@ -36,7 +36,7 @@ product_data <-
             show_col_types = FALSE
         ) %>%
             rename(search_rank = rank),
-        by = "product_id"
+        by = "ASIN"
     ) %>%
     inner_join(
         read_csv("inputs/queries.csv", show_col_types = FALSE) %>%
@@ -53,7 +53,7 @@ product_data <-
             mutate(
                 negative_log_best_seller_rank = -log(best_seller_rank)
             ),
-        by = "product_id"
+        by = "ASIN"
     ) %>%
     inner_join(
         read_csv(
@@ -62,7 +62,7 @@ product_data <-
         ) %>%
             # normalize this for easier interpretation
             mutate(scaled_relevance_score = scale(score)[,1]),
-        by = c("product_id", "query")
+        by = c("ASIN", "query")
     ) %>%
     select(
         amazon_brand,

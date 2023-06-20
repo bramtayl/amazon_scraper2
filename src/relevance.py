@@ -20,11 +20,11 @@ def index_product_pages(lucene_folder, product_pages_folder):
     writer = IndexWriter(
         NIOFSDirectory(Paths.get(lucene_folder)), IndexWriterConfig(StandardAnalyzer())
     )
-    for product_id in get_filenames(product_pages_folder):
-        print(product_id)
+    for ASIN in get_filenames(product_pages_folder):
+        print(ASIN)
         doc = Document()
-        doc.add(Field("product_id", product_id, StringField.TYPE_STORED))
-        with open(path.join(product_pages_folder, product_id + ".html"), "r", encoding="UTF-8") as io:
+        doc.add(Field("ASIN", ASIN, StringField.TYPE_STORED))
+        with open(path.join(product_pages_folder, ASIN + ".html"), "r", encoding="UTF-8") as io:
             doc.add(
                 Field(
                     "product_text",
@@ -52,7 +52,7 @@ def get_relevance_data(lucene_folder, queries):
                 DataFrame(
                     {
                         "query": [query],
-                        "product_id": [searcher.doc(score_data.doc)["product_id"]],
+                        "ASIN": [searcher.doc(score_data.doc)["ASIN"]],
                         "score": [score_data.score],
                     }
                 )
