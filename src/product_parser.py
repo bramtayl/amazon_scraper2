@@ -177,8 +177,7 @@ def parse_buybox(buybox, current_year):
     out_of_stock = False
     price = None
     returns = False
-    rush_shipping_date_start = None
-    rush_shipping_date_end = None
+    rush_shipping_available = False
     ships_from_amazon = False
     sold_by_amazon = False
     standard_shipping_conditional = False
@@ -258,6 +257,11 @@ def parse_buybox(buybox, current_year):
         if standard_shipping_widget["data-csa-c-delivery-condition"] != "":
             standard_shipping_conditional = True
 
+    rush_shipping_widgets = buybox.select("div#mir-layout-DELIVERY_BLOCK-slot-SECONDARY_DELIVERY_MESSAGE_LARGE span.a-text-bold")
+    if rush_shipping_widgets:
+        only(rush_shipping_widgets)
+        rush_shipping_available = True
+
     ships_from_widgets = buybox.select(
         "div.tabular-buybox-text[tabular-attribute-name='Ships from']"
     )
@@ -282,8 +286,7 @@ def parse_buybox(buybox, current_year):
         out_of_stock,
         price,
         returns,
-        rush_shipping_date_start,
-        rush_shipping_date_end,
+        rush_shipping_available,
         ships_from_amazon,
         sold_by_amazon,
         standard_shipping_conditional,
@@ -324,8 +327,7 @@ def parse_product_page(
     price = None
     refurbished = False
     returns = False
-    rush_shipping_date_start = None
-    rush_shipping_date_end = None
+    rush_shipping_available = False
     ships_from_amazon = False
     small_business = False
     sold_by_amazon = None
@@ -513,8 +515,7 @@ def parse_product_page(
             out_of_stock,
             price,
             returns,
-            rush_shipping_date_start,
-            rush_shipping_date_end,
+            rush_shipping_available,
             ships_from_amazon,
             sold_by_amazon,
             standard_shipping_conditional,
@@ -538,8 +539,7 @@ def parse_product_page(
                 out_of_stock,
                 price,
                 returns,
-                rush_shipping_date_start,
-                rush_shipping_date_end,
+                rush_shipping_available,
                 ships_from_amazon,
                 sold_by_amazon,
                 standard_shipping_conditional,
@@ -570,8 +570,6 @@ def parse_product_page(
     # if no end date, the date range is 0, and the end date is the start date
     if standard_shipping_date_end is None:
         standard_shipping_date_end = standard_shipping_date_start
-    if rush_shipping_date_end is None:
-        rush_shipping_date_start = rush_shipping_date_end
 
     product_rows.append(
         DataFrame(
@@ -597,8 +595,7 @@ def parse_product_page(
                 "department": [department],
                 "refurbished": [refurbished],
                 "returns": [returns],
-                "rush_shipping_date_start": [rush_shipping_date_start],
-                "rush_shipping_date_end": [rush_shipping_date_end],
+                "rush_shipping_available": [rush_shipping_available],
                 "ships_from_amazon": [ships_from_amazon],
                 "small_business": [small_business],
                 "sold_by_amazon": [sold_by_amazon],
