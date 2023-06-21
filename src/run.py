@@ -24,7 +24,7 @@ product_pages_folder = path.join(results_folder, "product_pages")
 maybe_create(product_pages_folder)
 
 search_data_file = path.join(results_folder, "search_data.csv")
-product_url_file = path.join(results_folder, "product_url_data.csv")
+product_ASINs_file = path.join(results_folder, "product_url_data.csv")
 
 lucene_folder = path.join(results_folder, "lucene")
 maybe_create(lucene_folder)
@@ -45,14 +45,15 @@ combine_folder_csvs(search_results_folder).to_csv(search_data_file, index=False)
 search_data = read_csv(search_data_file)
 
 search_data[["ASIN"]].drop_duplicates().to_csv(
-    product_url_file, index=False
+    product_ASINs_file, index=False
 )
 
-product_url_data = read_csv(product_url_file)
+# randomly shuffle the products to help avoid detection?
+product_ASINs = read_csv(product_ASINs_file).loc[:, "ASIN"].sample(frac = 1)
 
 user_agent_index = save_product_pages(
     browser_box,
-    product_url_data,
+    product_ASINs,
     product_pages_folder,
     user_agents,
     user_agent_index=user_agent_index,

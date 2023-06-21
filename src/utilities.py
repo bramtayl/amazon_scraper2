@@ -12,7 +12,7 @@ from selenium.webdriver.support.expected_conditions import (
 )
 from selenium.webdriver.support.wait import WebDriverWait as wait
 
-HEADLESS = False
+HEADLESS = True
 
 JUNK_SELECTORS = [
     "iframe",

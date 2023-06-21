@@ -43,7 +43,7 @@ def save_product_page(
 
 def save_product_pages(
     browser_box,
-    product_url_data,
+    product_ASINs,
     product_pages_folder,
     user_agents,
     user_agent_index=0,
@@ -55,7 +55,7 @@ def save_product_pages(
 
     # no previous product, so starts empty
     # product_url = product_url_data.loc[:, "url"][0]
-    for ASIN in product_url_data.loc[:, "ASIN"]:
+    for ASIN in product_ASINs:
         # don't save a product we already have
         if ASIN in completed_product_filenames:
             continue
