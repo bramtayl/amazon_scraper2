@@ -278,22 +278,22 @@ def parse_buybox(buybox, current_year):
     ):
         returns = True
 
-    return (
-        free_prime_shipping,
-        free_returns,
-        limited_stock,
-        price,
-        returns,
-        rush_shipping_available,
-        ships_from_amazon,
-        sold_by_amazon,
-        standard_shipping_conditional,
-        standard_shipping_cost,
-        standard_shipping_date_range,
-        standard_shipping_expected_date,
-        unit_price,
-        unit,
-    )
+    return {
+        "free_prime_shipping": free_prime_shipping,
+        "free_returns": free_returns,
+        "limited_stock": limited_stock,
+        "price": price,
+        "returns": returns,
+        "rush_shipping_available": rush_shipping_available,
+        "ships_from_amazon": ships_from_amazon,
+        "sold_by_amazon": sold_by_amazon,
+        "standard_shipping_conditional": standard_shipping_conditional,
+        "standard_shipping_cost": standard_shipping_cost,
+        "standard_shipping_date_range": standard_shipping_date_range,
+        "standard_shipping_expected_date": standard_shipping_expected_date,
+        "unit_price": unit_price,
+        "unit": unit,
+    }
 
 # product_rows = []
 # ASIN = get_filenames(product_pages_folder)[0]
@@ -502,44 +502,41 @@ def parse_product_page(
     buybox_sets = product_page.select("#buyBoxAccordion > div[id*='AccordionRow']")
     if buybox_sets:
         # use the first buybox
-        (
-            free_prime_shipping,
-            free_returns,
-            limited_stock,
-            price,
-            returns,
-            rush_shipping_available,
-            ships_from_amazon,
-            sold_by_amazon,
-            standard_shipping_conditional,
-            standard_shipping_cost,
-            standard_shipping_date_range,
-            standard_shipping_expected_date,
-            unit_price,
-            unit,
-        ) = parse_buybox(buybox_sets[0], current_year)
+        buybox_data = parse_buybox(buybox_sets[0], current_year)
+        free_prime_shipping = buybox_data["free_prime_shipping"]
+        free_returns = buybox_data["free_returns"]
+        limited_stock = buybox_data["limited_stock"]
+        price = buybox_data["price"]
+        returns = buybox_data["returns"]
+        rush_shipping_available = buybox_data["rush_shipping_available"]
+        ships_from_amazon = buybox_data["ships_from_amazon"]
+        sold_by_amazon = buybox_data["sold_by_amazon"]
+        standard_shipping_conditional = buybox_data["standard_shipping_conditional"]
+        standard_shipping_cost = buybox_data["standard_shipping_cost"]
+        standard_shipping_date_range = buybox_data["standard_shipping_date_range"]
+        standard_shipping_expected_date = buybox_data["standard_shipping_expected_date"]
+        unit_price = buybox_data["unit_price"]
+        unit = buybox_data["unit"]
     else:
         buyboxes = product_page.select(
             "div[data-csa-c-content-id='desktop_buybox_group_1']"
         )
         if buyboxes:
-            buybox = only(buyboxes)
-            (
-                free_prime_shipping,
-                free_returns,
-                limited_stock,
-                price,
-                returns,
-                rush_shipping_available,
-                ships_from_amazon,
-                sold_by_amazon,
-                standard_shipping_conditional,
-                standard_shipping_cost,
-                standard_shipping_date_range,
-                standard_shipping_expected_date,
-                unit_price,
-                unit,
-            ) = parse_buybox(buybox, current_year)
+            buybox_data = parse_buybox(only(buyboxes), current_year)
+            free_prime_shipping = buybox_data["free_prime_shipping"]
+            free_returns = buybox_data["free_returns"]
+            limited_stock = buybox_data["limited_stock"]
+            price = buybox_data["price"]
+            returns = buybox_data["returns"]
+            rush_shipping_available = buybox_data["rush_shipping_available"]
+            ships_from_amazon = buybox_data["ships_from_amazon"]
+            sold_by_amazon = buybox_data["sold_by_amazon"]
+            standard_shipping_conditional = buybox_data["standard_shipping_conditional"]
+            standard_shipping_cost = buybox_data["standard_shipping_cost"]
+            standard_shipping_date_range = buybox_data["standard_shipping_date_range"]
+            standard_shipping_expected_date = buybox_data["standard_shipping_expected_date"]
+            unit_price = buybox_data["unit_price"]
+            unit = buybox_data["unit"]
 
     subscription_widgets = product_page.select("div#snsAccordionRowMiddle")
     if subscription_widgets:
