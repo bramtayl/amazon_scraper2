@@ -44,16 +44,16 @@ parse_search_pages(search_pages_folder).to_csv(search_data_file, index=False)
 
 search_data = read_csv(search_data_file)
 
-
-class DuplicateASINs(Exception):
-    pass
-
-
 search_data[["ASIN", "url_name"]].drop_duplicates().to_csv(
     product_url_file, index=False
 )
 
+
+
 product_url_data = read_csv(product_url_file)
+
+class DuplicateASINs(Exception):
+    pass
 
 if len(set(product_url_data.loc[:, "ASIN"])) != product_url_data.shape[0]:
     raise DuplicateASINs()

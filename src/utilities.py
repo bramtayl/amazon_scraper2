@@ -12,6 +12,8 @@ from selenium.webdriver.support.expected_conditions import (
 )
 from selenium.webdriver.support.wait import WebDriverWait as wait
 
+HEADLESS = True
+
 JUNK_SELECTORS = [
     "iframe",
     "map",
@@ -91,7 +93,8 @@ def only(list):
 def new_browser(user_agent, fakespot=False):
     options = Options()
     # add headless to avoid the visual display and speed things up
-    # options.add_argument("-headless")
+    if HEADLESS:
+        options.add_argument("-headless")
     options.set_preference("general.useragent.override", user_agent)
     # this helps pages load faster I guess?
     options.set_capability("pageLoadStrategy", "eager")

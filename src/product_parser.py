@@ -176,8 +176,7 @@ def parse_buybox(buybox, current_year):
     limited_stock = False
     out_of_stock = False
     price = None
-    return_within_days = 0
-    returns_text = ""
+    returns = False
     rush_shipping_date_start = None
     rush_shipping_date_end = None
     ships_from_amazon = False
@@ -271,18 +270,10 @@ def parse_buybox(buybox, current_year):
     if sold_by_widgets:
         sold_by_amazon = "Amazon" in only(sold_by_widgets).text
 
-    returns_text_widgets = buybox.select(
+    if buybox.select(
         "div.tabular-buybox-text[tabular-attribute-name='Returns'] span.tabular-buybox-text-message"
-    )
-    if returns_text_widgets:
-        returns_text = only(returns_text_widgets).text
-        if returns_text != "Eligible for Refund or Replacement":
-            return_within_days = int(
-                strict_match(
-                    r"Eligible for Return, Refund or Replacement within ([\d]+) days of receipt",
-                    returns_text,
-                ).group(1)
-            )
+    ):
+        returns = True
 
     return (
         free_prime_shipping,
@@ -290,7 +281,7 @@ def parse_buybox(buybox, current_year):
         limited_stock,
         out_of_stock,
         price,
-        return_within_days,
+        returns,
         rush_shipping_date_start,
         rush_shipping_date_end,
         ships_from_amazon,
@@ -332,7 +323,7 @@ def parse_product_page(
     out_of_stock = False
     price = None
     refurbished = False
-    return_within_days = 0
+    returns = False
     rush_shipping_date_start = None
     rush_shipping_date_end = None
     ships_from_amazon = False
@@ -521,7 +512,7 @@ def parse_product_page(
             limited_stock,
             out_of_stock,
             price,
-            return_within_days,
+            returns,
             rush_shipping_date_start,
             rush_shipping_date_end,
             ships_from_amazon,
@@ -546,7 +537,7 @@ def parse_product_page(
                 limited_stock,
                 out_of_stock,
                 price,
-                return_within_days,
+                returns,
                 rush_shipping_date_start,
                 rush_shipping_date_end,
                 ships_from_amazon,
@@ -605,7 +596,7 @@ def parse_product_page(
                 "price": [price],
                 "department": [department],
                 "refurbished": [refurbished],
-                "return_within_days": [return_within_days],
+                "returns": [returns],
                 "rush_shipping_date_start": [rush_shipping_date_start],
                 "rush_shipping_date_end": [rush_shipping_date_end],
                 "ships_from_amazon": [ships_from_amazon],

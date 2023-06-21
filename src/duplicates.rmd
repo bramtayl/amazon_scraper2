@@ -1,0 +1,46 @@
+
+```{r, echo = FALSE}
+library(dplyr, warn.conflicts = FALSE)
+library(ggplot2)
+library(pander)
+library(readr)
+library(tidyr)
+
+search_data = read_csv("../results/search_data.csv", show_col_types = FALSE)
+
+wide_data = 
+    search_data %>%
+    select(query, ASIN, rank, sponsored) %>%
+    pivot_wider(names_from = sponsored, values_from = rank) %>%
+    rename(
+        unsponsored_rank = `TRUE`,
+        sponsored_rank = `FALSE`
+    ) %>%
+    left_join(
+        search_data %>% select(query, ASIN, url_name, amazon_brand),
+        by = c("query", "ASIN")
+    )
+```
+
+```{r, echo = FALSE}
+table_data = table(is.na(wide_data$unsponsored_rank), is.na(wide_data$sponsored_rank))
+rownames(table_data) = c("Sponsored listing", "No sponsored listing")
+colnames(table_data) = c("Organic listing", "No organic listing")
+table_data = table_data / sum(table_data) * 100
+pander(table_data, "The percentage of products that have each combination of sponsored and organic listings")
+```
+
+From this table, roughly a third of the sponsored listings have a duplicate on the first page.
+
+For products which have both, here is a scatter plot of the unsponsored vs. sponsored rank.
+
+```{r, echo = FALSE}
+ggplot(
+    wide_data %>%
+    select(`Sponsored rank` = sponsored_rank, `Unsponsored rank` = unsponsored_rank) %>%
+    filter(complete.cases(.))
+) +
+    geom_point(aes(x = `Unsponsored rank`, y = `Sponsored rank`)) +
+    geom_line(aes(x = `Unsponsored rank`, y = `Unsponsored rank`)) +
+    coord_fixed()
+```
