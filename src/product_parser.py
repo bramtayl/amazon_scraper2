@@ -200,26 +200,27 @@ def parse_buybox(buybox, current_year):
     if price_pair_widgets:
         price_pair_widget = only(price_pair_widgets)
         price_widgets = price_pair_widget.select("span.a-offscreen")
-        if len(price_widgets) >= 1:
+        number_of_prices = len(price_widgets)
+        if number_of_prices >= 1:
             price = parse_price(price_widgets[0].text)
-        if len(price_widgets) >= 2:
+        if number_of_prices >= 2:
             unit_price_widget = price_widgets[1]
             unit_price = parse_price(unit_price_widget.text)
             unit = (
                 strict_match(
                     # e.g "/ Fl Oz )"
                     r"\/(.*)\)",
-                    # parent the price and offscreen price
-                    # parent of that includes the unit
-                    # first paren is child 0, price is child 1, unit and close paren is child 2
+                    # first parent is price and offscreen price
+                    # grandparent includes the unit
+                    # open paren is child 0, price is child 1, unit and close paren is child 2
                     unit_price_widget.parent.parent.contents[2].text
                 )
                 .group(1)
                 .strip()
             )
 
-        if len(price_widgets) >= 3:
-            raise NotOneOrTwoPrices()
+        if number_of_prices >= 3:
+            raise NotOneOrTwoPrices(number_of_prices)
 
     free_prime_shipping_widgets = buybox.select("span#price-shipping-message")
     if free_prime_shipping_widgets:
@@ -348,11 +349,12 @@ def parse_product_page(
     unsupported_browser_widgets = product_page.select("h2.heading.title")
     if unsupported_browser_widgets:
         # this is a non-specific CSS selector, so check the text too
+        unsupported_text = only(unsupported_browser_widgets).text
         if (
             not "Your browser is not supported"
-            in only(unsupported_browser_widgets).text
+            in unsupported_text
         ):
-            raise NotUnsupported()
+            raise NotUnsupported(unsupported_text)
         return
 
     # can't find the product, so consider alternatives
@@ -477,8 +479,9 @@ def parse_product_page(
                 ).group(1)
             )
             histogram_rows = ratings_widget.select("tr.a-histogram-row")
+            number_of_histogram_rows = len(histogram_rows)
             if len(histogram_rows) != 5:
-                raise NotFiveRows()
+                raise NotFiveRows(number_of_histogram_rows)
 
             five_star_percent = get_star_percent(histogram_rows[0])
             four_star_percent = get_star_percent(histogram_rows[1])

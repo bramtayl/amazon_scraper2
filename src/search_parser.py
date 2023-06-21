@@ -82,10 +82,6 @@ def parse_search_page(search_pages_folder, query):
     )
 
 
-class DuplicateProductUrls(Exception):
-    pass
-
-
 def parse_search_pages(search_pages_folder):
     return concat(
         parse_search_page(search_pages_folder, query)

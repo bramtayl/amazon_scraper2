@@ -85,8 +85,9 @@ class NotExactlyOneError(Exception):
 # throw an error if there isn't one and only one result
 # important safety measure for CSS selectors
 def only(list):
+    number_of_items = len(list)
     if len(list) != 1:
-        raise NotExactlyOneError()
+        raise NotExactlyOneError(number_of_items)
     return list[0]
 
 
@@ -249,5 +250,5 @@ class RegexError(Exception):
 def strict_match(regex, text):
     match = re.fullmatch(regex, text)
     if match == None:
-        raise RegexError(text)
+        raise RegexError(regex + ": " + text)
     return match
