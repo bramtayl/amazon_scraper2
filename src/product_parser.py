@@ -174,7 +174,6 @@ def parse_buybox(buybox, current_year):
     free_prime_shipping = False
     free_returns = False
     limited_stock = False
-    out_of_stock = False
     price = None
     returns = False
     rush_shipping_available = False
@@ -184,19 +183,8 @@ def parse_buybox(buybox, current_year):
     standard_shipping_cost = None
     standard_shipping_date_start = None
     standard_shipping_date_end = None
-    undeliverable = False
     unit = "Purchase"
     unit_price = None
-
-    out_of_stock_widgets = buybox.select("div#outOfStock")
-    if out_of_stock_widgets:
-        only(out_of_stock_widgets)
-        out_of_stock = True
-
-    undeliverable_widgets = buybox.select("div#exports_desktop_undeliverable_buybox")
-    if undeliverable_widgets:
-        only(undeliverable_widgets)
-        undeliverable = True
 
     # price and unit price
     price_pair_widgets = buybox.select("div#corePrice_feature_div")
@@ -283,7 +271,6 @@ def parse_buybox(buybox, current_year):
         free_prime_shipping,
         free_returns,
         limited_stock,
-        out_of_stock,
         price,
         returns,
         rush_shipping_available,
@@ -293,7 +280,6 @@ def parse_buybox(buybox, current_year):
         standard_shipping_cost,
         standard_shipping_date_start,
         standard_shipping_date_end,
-        undeliverable,
         unit_price,
         unit,
     )
@@ -323,7 +309,6 @@ def parse_product_page(
     list_price = None
     new_seller = False
     number_of_ratings = 0
-    out_of_stock = False
     price = None
     refurbished = False
     returns = False
@@ -337,7 +322,6 @@ def parse_product_page(
     standard_shipping_date_end = None
     subscription_available = False
     subscribe_coupon = False
-    undeliverable = False
     unit = "Purchase"
     unit_price = None
 
@@ -512,7 +496,6 @@ def parse_product_page(
             free_prime_shipping,
             free_returns,
             limited_stock,
-            out_of_stock,
             price,
             returns,
             rush_shipping_available,
@@ -522,7 +505,6 @@ def parse_product_page(
             standard_shipping_cost,
             standard_shipping_date_start,
             standard_shipping_date_end,
-            undeliverable,
             unit_price,
             unit,
         ) = parse_buybox(buybox, current_year)
@@ -536,7 +518,6 @@ def parse_product_page(
                 free_prime_shipping,
                 free_returns,
                 limited_stock,
-                out_of_stock,
                 price,
                 returns,
                 rush_shipping_available,
@@ -546,7 +527,6 @@ def parse_product_page(
                 standard_shipping_cost,
                 standard_shipping_date_start,
                 standard_shipping_date_end,
-                undeliverable,
                 unit_price,
                 unit,
             ) = parse_buybox(buybox, current_year)
@@ -590,7 +570,6 @@ def parse_product_page(
                 "ASIN": [ASIN],
                 "new_seller": [new_seller],
                 "number_of_ratings": [number_of_ratings],
-                "out_of_stock": [out_of_stock],
                 "price": [price],
                 "department": [department],
                 "refurbished": [refurbished],
@@ -605,7 +584,6 @@ def parse_product_page(
                 "standard_shipping_date_end": [standard_shipping_date_end],
                 "subscribe_coupon": [subscribe_coupon],
                 "subscription_available": [subscription_available],
-                "undeliverable": [undeliverable],
                 "unit": [unit],
                 "unit_price": [unit_price],
                 "one_star_percent": [one_star_percent],
