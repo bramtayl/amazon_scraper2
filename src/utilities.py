@@ -12,7 +12,7 @@ from selenium.webdriver.support.expected_conditions import (
 )
 from selenium.webdriver.support.wait import WebDriverWait as wait
 
-HEADLESS = True
+HEADLESS = False
 
 JUNK_SELECTORS = [
     "iframe",
@@ -166,9 +166,7 @@ def remove_whitespace(soup):
         elif text != stripped:
             text.replace_with(stripped)
 
-
-# soup = product_page
-def save_browser(browser, filename):
+def get_clean_soup(browser):
     soup = BeautifulSoup(
         browser.page_source.encode("utf-8"), "lxml", from_encoding="UTF-8"
     )
@@ -181,13 +179,18 @@ def save_browser(browser, filename):
     for div in soup.select("div"):
         if is_empty_div(div):
             div.extract()
+    return soup
+
+
+# soup = product_page
+def save_browser(browser, filename):
     with open(filename, "w", encoding="UTF-8") as io:
-        io.write(soup.prettify())
+        io.write(get_clean_soup(browser).prettify())
 
 
 def wait_for_amazon(browser):
     try:
-        # wait a couple of seconds for a new page to start not_located
+        # wait a couple of seconds for a new page to start loading
         wait(browser, 2).until(not_located((By.CSS_SELECTOR, "#navFooter")))
     except TimeoutException:
         # if we time out, its already loaded

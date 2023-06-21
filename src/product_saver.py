@@ -21,10 +21,9 @@ from src.utilities import (
 def save_product_page(
     browser,
     ASIN,
-    url_name,
     product_pages_folder,
 ):
-    browser.get("https://www.amazon.com/" + url_name + "/dp/" + ASIN)
+    browser.get("https://www.amazon.com/dp/" + ASIN)
 
     wait_for_amazon(browser)
     try:
@@ -56,10 +55,7 @@ def save_product_pages(
 
     # no previous product, so starts empty
     # product_url = product_url_data.loc[:, "url"][0]
-    for ASIN, url_name in zip(
-        product_url_data.loc[:, "ASIN"],
-        product_url_data.loc[:, "url_name"],
-    ):
+    for ASIN in product_url_data.loc[:, "ASIN"]:
         # don't save a product we already have
         if ASIN in completed_product_filenames:
             continue
@@ -68,18 +64,17 @@ def save_product_pages(
             save_product_page(
                 browser,
                 ASIN,
-                url_name,
                 product_pages_folder,
             )
         except GoneError:
             # if the product is gone, print some debug information, and just continue
-            print(url_name + "/dp/" + ASIN)
+            print(str(ASIN))
             print("Page no longer exists, skipping")
             continue
         except TimeoutException:
             # if the product times out, print some debug information, and just continue
             # come back to get it later
-            print(url_name + "/dp/" + ASIN)
+            print(str(ASIN))
             print("Timeout, skipping")
             continue
         except FoiledAgainError:
@@ -90,17 +85,16 @@ def save_product_pages(
                 save_product_page(
                     browser,
                     ASIN,
-                    url_name,
                     product_pages_folder,
                 )
             # hande the errors above again, except for the FoiledAgain error
             # if there's still a captcha this time, just give up
             except GoneError:
-                print(url_name + "/dp/" + ASIN)
+                print(str(ASIN))
                 print("Page no longer exists, skipping")
                 continue
             except TimeoutException:
-                print(url_name + "/dp/" + ASIN)
+                print(str(ASIN))
                 print("Timeout, skipping")
                 continue
 
