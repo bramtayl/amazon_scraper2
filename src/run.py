@@ -24,13 +24,13 @@ product_pages_folder = path.join(results_folder, "product_pages")
 maybe_create(product_pages_folder)
 
 search_data_file = path.join(results_folder, "search_data.csv")
-product_ASINs_file = path.join(results_folder, "product_url_data.csv")
+product_ASINs_file = path.join(results_folder, "product_ASINs_data.csv")
 
 lucene_folder = path.join(results_folder, "lucene")
 maybe_create(lucene_folder)
 
 browser_box = []
-user_agent_index = 0
+user_agent_index = 5
 
 user_agent_index = save_search_pages(
     browser_box,
