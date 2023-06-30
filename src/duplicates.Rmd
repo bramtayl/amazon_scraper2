@@ -1,0 +1,65 @@
+
+```{r, echo = FALSE}
+library(dplyr, warn.conflicts = FALSE)
+library(ggplot2)
+library(pander)
+library(readr)
+library(tidyr)
+
+search_data = read_csv("results/search_data.csv", show_col_types = FALSE)
+
+MAX_SPONSORED_RANK = 10
+
+wide_data = 
+    search_data %>%
+    # remove sponsored and non-sponsored duplicates
+    group_by(query, ASIN, sponsored) %>%
+    slice(1) %>%
+    ungroup %>%
+    # rerank
+    arrange(query, page_number, rank) %>%
+    group_by(query) %>%
+    mutate(rank = seq_len(n())) %>%
+    ungroup %>%
+    select(query, ASIN, rank, sponsored) %>%
+    pivot_wider(names_from = sponsored, values_from = rank) %>%
+    rename(
+        unsponsored_rank = `FALSE`,
+        sponsored_rank = `TRUE`
+    ) %>%
+    left_join(
+        search_data %>% select(query, ASIN, amazon_brand),
+        by = c("query", "ASIN")
+    ) %>%
+    filter(is.na(sponsored_rank) | sponsored_rank < MAX_SPONSORED_RANK)
+```
+
+
+```{r, echo = FALSE}
+search_data %>%
+group_by(query, ASIN, sponsored) %>% 
+summarize(number_of_duplicates = n()) %>%
+ungroup() %>%
+group_by(sponsored, number_of_duplicates) %>%
+summarize(count = n()) %>%
+ungroup()
+
+```
+
+From this table, roughly a third of the sponsored listings have a duplicate on the first page.
+
+For products which have both, here is a scatter plot of the unsponsored vs. sponsored rank.
+
+```{r, echo = FALSE}
+ggplot(
+    wide_data %>%
+    select(
+        `Unsponsored rank` = unsponsored_rank,
+        `Sponsored rank` =sponsored_rank
+    ) %>%
+    filter(complete.cases(.))
+) +
+    geom_point(aes(x = `Unsponsored rank`, y = `Sponsored rank`)) +
+    geom_line(aes(x = `Unsponsored rank`, y = `Unsponsored rank`)) + 
+    coord_fixed()
+```

@@ -15,6 +15,8 @@ from src.utilities import (
     wait_for_amazon,
     WAIT_TIME,
 )
+from time import sleep
+from urllib3.exceptions import ProtocolError
 
 
 # product_url = product_url_data.loc[:, "product_url"][0]
@@ -77,6 +79,45 @@ def save_product_pages(
             print(str(ASIN))
             print("Timeout, skipping")
             continue
+        except ProtocolError:
+            print("WiFi dropped, sleeping and retrying")
+            sleep(60)
+            try:
+                save_product_page(
+                    browser,
+                    ASIN,
+                    product_pages_folder,
+                )
+            # hande the errors above again, except for the FoiledAgain error
+            # if there's still a captcha this time, just give up
+            except GoneError:
+                print(str(ASIN))
+                print("Page no longer exists, skipping")
+                continue
+            except TimeoutException:
+                print(str(ASIN))
+                print("Timeout, skipping")
+                continue
+            except FoiledAgainError:
+                browser, user_agent_index = switch_user_agent(
+                    browser_box, browser, user_agents, user_agent_index
+                )
+                try:
+                    save_product_page(
+                        browser,
+                        ASIN,
+                        product_pages_folder,
+                    )
+                # hande the errors above again, except for the FoiledAgain error
+                # if there's still a captcha this time, just give up
+                except GoneError:
+                    print(str(ASIN))
+                    print("Page no longer exists, skipping")
+                    continue
+                except TimeoutException:
+                    print(str(ASIN))
+                    print("Timeout, skipping")
+                    continue
         except FoiledAgainError:
             browser, user_agent_index = switch_user_agent(
                 browser_box, browser, user_agents, user_agent_index
@@ -97,6 +138,25 @@ def save_product_pages(
                 print(str(ASIN))
                 print("Timeout, skipping")
                 continue
+            except ProtocolError:
+                print("WiFi dropped, sleeping and retrying")
+                sleep(60)
+                try:
+                    save_product_page(
+                        browser,
+                        ASIN,
+                        product_pages_folder,
+                    )
+                # hande the errors above again, except for the FoiledAgain error
+                # if there's still a captcha this time, just give up
+                except GoneError:
+                    print(str(ASIN))
+                    print("Page no longer exists, skipping")
+                    continue
+                except TimeoutException:
+                    print(str(ASIN))
+                    print("Timeout, skipping")
+                    continue
 
     browser.close()
     browser_box.clear()

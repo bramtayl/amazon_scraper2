@@ -59,7 +59,7 @@ JUNK_SELECTORS = [
 # time for timed waits
 WAIT_TIME = 20
 
-FAKESPOT_FILE = "/home/brandon/snap/firefox/common/.mozilla/firefox/0tsz0chl.default/extensions/{44df5123-f715-9146-bfaa-c6e8d4461d44}.xpi"
+FAKESPOT_FILE = "/home/brandon/snap/firefox/common/.mozilla/firefox/fi1pyptz.default/extensions/{44df5123-f715-9146-bfaa-c6e8d4461d44}.xpi"
 
 
 # custom error if amazon stops us with captcha
@@ -135,10 +135,10 @@ def switch_user_agent(browser_box, browser, user_agents, user_agent_index):
 
 
 # combine all the csvs in a folder into a dataframe
-def combine_folder_csvs(folder, index_column):
+def combine_folder_csvs(folder):
     return concat(
         (
-            read_csv(path.join(folder, file)).set_index(index_column)
+            read_csv(path.join(folder, file))
             for file in listdir(folder)
         )
     )
