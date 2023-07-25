@@ -118,9 +118,8 @@ def new_browser(user_agent, fakespot=False):
     return browser
 
 
-def switch_user_agent(browser_box, browser, user_agents, user_agent_index):
+def switch_user_agent(browser, user_agents, user_agent_index):
     browser.close()
-    browser_box.clear()
     # if Amazon sends a captcha, change the user agent and try again
     if user_agent_index == len(user_agents) - 1:
         # start again if we're at the end

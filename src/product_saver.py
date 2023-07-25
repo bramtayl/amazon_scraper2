@@ -1,4 +1,7 @@
-from os import path
+from concurrent.futures import ThreadPoolExecutor
+import gc
+from numpy import array_split, copy
+from os import cpu_count, path
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.support.expected_conditions import (
@@ -10,6 +13,7 @@ from src.utilities import (
     GoneError,
     get_filenames,
     new_browser,
+    only,
     save_browser,
     switch_user_agent,
     wait_for_amazon,
@@ -18,16 +22,27 @@ from src.utilities import (
 from time import sleep
 from urllib3.exceptions import ProtocolError
 
-
 # product_url = product_url_data.loc[:, "product_url"][0]
 def save_product_page(
+    thread_id,
     browser,
     ASIN,
     product_pages_folder,
+    first_time = False
 ):
+    print("thread {0:d} saving product {1}!".format(thread_id, ASIN))
     browser.get("https://www.amazon.com/dp/" + ASIN)
 
     wait_for_amazon(browser)
+    if first_time:
+        try:
+            wait(browser, WAIT_TIME).until(
+                located((By.CSS_SELECTOR, "button#fs-opt-in"))
+            )
+            only(browser.find_elements(By.CSS_SELECTOR, "button#fs-opt-in")).click()
+        except TimeoutException as an_error:
+            pass
+
     try:
         # wait for fakespot grade
         wait(browser, WAIT_TIME).until(
@@ -41,19 +56,20 @@ def save_product_page(
         browser,
         path.join(product_pages_folder, ASIN + ".html"),
     )
-
+    gc.collect()
 
 def save_product_pages(
-    browser_box,
+    thread_id,
     product_ASINs,
     product_pages_folder,
     user_agents,
     user_agent_index=0,
 ):
+    print("started thread {0:d}!".format(thread_id))
     browser = new_browser(user_agents[user_agent_index], fakespot=True)
-    browser_box.append(browser)
 
     completed_product_filenames = get_filenames(product_pages_folder)
+    first_time = True
 
     # no previous product, so starts empty
     # product_url = product_url_data.loc[:, "url"][0]
@@ -64,9 +80,11 @@ def save_product_pages(
 
         try:
             save_product_page(
+                thread_id,
                 browser,
                 ASIN,
                 product_pages_folder,
+                first_time
             )
         except GoneError:
             # if the product is gone, print some debug information, and just continue
@@ -84,9 +102,11 @@ def save_product_pages(
             sleep(60)
             try:
                 save_product_page(
+                    thread_id,
                     browser,
                     ASIN,
                     product_pages_folder,
+                    first_time
                 )
             # hande the errors above again, except for the FoiledAgain error
             # if there's still a captcha this time, just give up
@@ -100,13 +120,15 @@ def save_product_pages(
                 continue
             except FoiledAgainError:
                 browser, user_agent_index = switch_user_agent(
-                    browser_box, browser, user_agents, user_agent_index
+                    browser, user_agents, user_agent_index
                 )
                 try:
                     save_product_page(
+                        thread_id,
                         browser,
                         ASIN,
                         product_pages_folder,
+                        first_time
                     )
                 # hande the errors above again, except for the FoiledAgain error
                 # if there's still a captcha this time, just give up
@@ -120,13 +142,15 @@ def save_product_pages(
                     continue
         except FoiledAgainError:
             browser, user_agent_index = switch_user_agent(
-                browser_box, browser, user_agents, user_agent_index
+                browser, user_agents, user_agent_index
             )
             try:
                 save_product_page(
+                    thread_id,
                     browser,
                     ASIN,
                     product_pages_folder,
+                    first_time
                 )
             # hande the errors above again, except for the FoiledAgain error
             # if there's still a captcha this time, just give up
@@ -143,9 +167,11 @@ def save_product_pages(
                 sleep(60)
                 try:
                     save_product_page(
+                        thread_id,
                         browser,
                         ASIN,
                         product_pages_folder,
+                        first_time,
                     )
                 # hande the errors above again, except for the FoiledAgain error
                 # if there's still a captcha this time, just give up
@@ -157,8 +183,26 @@ def save_product_pages(
                     print(str(ASIN))
                     print("Timeout, skipping")
                     continue
+        first_time = False
 
     browser.close()
-    browser_box.clear()
+    print("finished thread {0:d}!".format(thread_id))
 
     return user_agent_index
+
+def multithread_save_product_pages(threads, user_agents, ASINs, product_pages_folder):
+    with ThreadPoolExecutor() as executor:
+        for result in executor.map(
+            lambda thread_id, sub_product_list, sub_user_agent_list: save_product_pages(
+                thread_id,
+                copy(sub_product_list),
+                product_pages_folder,
+                copy(sub_user_agent_list),
+            ),
+            range(threads),
+            array_split(
+                ASINs, threads
+            ),
+            array_split(user_agents, threads),
+        ):
+            print(result)

@@ -18,7 +18,7 @@ FAKESPOT_RANKINGS = {"A": 1, "B": 2, "C": 3, "D": 4, "F": 5, "?": None}
 def get_star_percent(histogram_row):
     return int(
         strict_match(
-            r"(\d)+%", only(histogram_row.select("td.a-text-right")).text
+            r"(\d+)%", only(histogram_row.select("td.a-text-right")).text
         ).group(1)
     )
 
@@ -74,41 +74,35 @@ def parse_dates(date_text, current_year):
     # e.g. January 1 - February 10
     multi_month_match = re.search(r"(\w+) (\d+) \- (\w+) (\d+)", date_text)
     if not multi_month_match is None:
-        standard_shipping_date_start = date(
+        return (date(
             current_year,
             MONTH_NUMBERS[multi_month_match.group(1)],
             int(multi_month_match.group(2)),
-        )
-        standard_shipping_date_range = date(
+        ), date(
             current_year,
             MONTH_NUMBERS[multi_month_match.group(3)],
             int(multi_month_match.group(4)),
-        ) - standard_shipping_date_start
-        return standard_shipping_date_start + standard_shipping_date_range / 2, standard_shipping_date_range
+        ))
 
     # date range within one month
     # e.g. January 1 - 4
     single_month_match = re.search(r"(\w+) (\d+) \- (\d+)", date_text)
     if not single_month_match is None:
         month_number = MONTH_NUMBERS[single_month_match.group(1)]
-        standard_shipping_date_start = date(current_year, month_number, int(single_month_match.group(2)))
-        standard_shipping_date_range = date(
+        return (date(current_year, month_number, int(single_month_match.group(2))), date(
             current_year, month_number, int(single_month_match.group(3))
-        ) - standard_shipping_date_start
-        return standard_shipping_date_start + standard_shipping_date_range / 2, standard_shipping_date_range
+        ))
 
     # single date
     # e.g. January 1
     single_day_match = re.search(r"(\w+) (\d+)", date_text)
     if not single_day_match is None:
-        return (
-            date(
+        standard_shipping_date = date(
                 current_year,
                 MONTH_NUMBERS[single_day_match.group(1)],
                 int(single_day_match.group(2)),
-            ),
-            0,
-        )
+            )
+        return (standard_shipping_date, standard_shipping_date)
     
     raise DateParseError(date_text)
 
@@ -162,7 +156,7 @@ def parse_coupon(promo_widget):
     coupon_percent = None
     subscribe_coupon = False
 
-    coupon_widgets = promo_widget.select("label[id*='couponText']")
+    coupon_widgets = promo_widget.select("span[class*='OneTimePurchase']:not(.aok-hidden) label[id*='couponText'], span[class*='promoPriceBlockMessage']:not(.aok-hidden) label[id*='couponText']")
     if coupon_widgets:
         coupon_text = only(coupon_widgets).contents[0].text
         coupon_amount_match = re.fullmatch(r"Apply \$([\d+\.]) coupon", coupon_text)
@@ -190,8 +184,8 @@ def parse_buybox(buybox, current_year):
     sold_by_amazon = False
     standard_shipping_conditional = False
     standard_shipping_cost = None
-    standard_shipping_expected_date = None
-    standard_shipping_date_range = None
+    standard_shipping_date_start = None
+    standard_shipping_date_end = None
     unit = "Purchase"
     unit_price = None
 
@@ -244,7 +238,7 @@ def parse_buybox(buybox, current_year):
     )
     if standard_shipping_widgets:
         standard_shipping_widget = only(standard_shipping_widgets)
-        (standard_shipping_expected_date, standard_shipping_date_range) = parse_dates(
+        (standard_shipping_date_start, standard_shipping_date_end) = parse_dates(
             standard_shipping_widget["data-csa-c-delivery-time"], current_year
         )
         standard_shipping_cost_text = standard_shipping_widget[
@@ -290,8 +284,8 @@ def parse_buybox(buybox, current_year):
         "sold_by_amazon": sold_by_amazon,
         "standard_shipping_conditional": standard_shipping_conditional,
         "standard_shipping_cost": standard_shipping_cost,
-        "standard_shipping_date_range": standard_shipping_date_range,
-        "standard_shipping_expected_date": standard_shipping_expected_date,
+        "standard_shipping_date_start": standard_shipping_date_start,
+        "standard_shipping_date_end": standard_shipping_date_end,
         "unit_price": unit_price,
         "unit": unit,
     }
@@ -330,8 +324,8 @@ def parse_product_page(
     sold_by_amazon = None
     standard_shipping_conditional = False
     standard_shipping_cost = None
-    standard_shipping_date_range = None
-    standard_shipping_expected_date = None
+    standard_shipping_date_start = None
+    standard_shipping_date_end = None
     subscription_available = False
     subscribe_coupon = False
     unit = "Purchase"
@@ -516,8 +510,8 @@ def parse_product_page(
         sold_by_amazon = buybox_data["sold_by_amazon"]
         standard_shipping_conditional = buybox_data["standard_shipping_conditional"]
         standard_shipping_cost = buybox_data["standard_shipping_cost"]
-        standard_shipping_date_range = buybox_data["standard_shipping_date_range"]
-        standard_shipping_expected_date = buybox_data["standard_shipping_expected_date"]
+        standard_shipping_date_start = buybox_data["standard_shipping_date_start"]
+        standard_shipping_date_end = buybox_data["standard_shipping_date_end"]
         unit_price = buybox_data["unit_price"]
         unit = buybox_data["unit"]
     else:
@@ -536,8 +530,8 @@ def parse_product_page(
             sold_by_amazon = buybox_data["sold_by_amazon"]
             standard_shipping_conditional = buybox_data["standard_shipping_conditional"]
             standard_shipping_cost = buybox_data["standard_shipping_cost"]
-            standard_shipping_date_range = buybox_data["standard_shipping_date_range"]
-            standard_shipping_expected_date = buybox_data["standard_shipping_expected_date"]
+            standard_shipping_date_start = buybox_data["standard_shipping_date_start"]
+            standard_shipping_date_end = buybox_data["standard_shipping_date_end"]
             unit_price = buybox_data["unit_price"]
             unit = buybox_data["unit"]
 
@@ -587,8 +581,8 @@ def parse_product_page(
                 "sold_by_amazon": [sold_by_amazon],
                 "standard_shipping_cost": [standard_shipping_cost],
                 "standard_shipping_conditional": [standard_shipping_conditional],
-                "standard_shipping_date_range": [standard_shipping_date_range],
-                "standard_shipping_expected_date": [standard_shipping_expected_date],
+                "standard_shipping_date_start": [standard_shipping_date_start],
+                "standard_shipping_date_end": [standard_shipping_date_end],
                 "subscribe_coupon": [subscribe_coupon],
                 "subscription_available": [subscription_available],
                 "unit": [unit],

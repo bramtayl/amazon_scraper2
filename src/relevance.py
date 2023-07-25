@@ -39,7 +39,7 @@ def index_product_pages(lucene_folder, product_pages_folder):
     writer.close()
 
 
-def get_relevance_data(lucene_folder, queries):
+def get_relevance_data(lucene_folder, queries, number_of_matches):
     searcher = IndexSearcher(
         DirectoryReader.open(NIOFSDirectory(Paths.get(lucene_folder)))
     )
@@ -49,7 +49,7 @@ def get_relevance_data(lucene_folder, queries):
     results = []
     for query in queries:
         print(query)
-        for score_data in searcher.search(parser.parse(query), 100).scoreDocs:
+        for score_data in searcher.search(parser.parse(query), number_of_matches).scoreDocs:
             results.append(
                 DataFrame(
                     {

@@ -1,4 +1,6 @@
-rologit best_seller_rank average_rating discount_percent log_unit_price number_of_ratings small_business_logical subscription_available_logical i.unit_factor five_star_percent, group(best_seller_category_factor) reverse
+import delimited "/home/brandon/amazon_scraper/small_filtered_data.csv"
+encode best_seller_category, generate(best_seller_category_encoded)
+encode department, generate(department_encoded)
+encode query, generate(query_encoded)
 
-rologit search_rank fakespot_ranking free_returns_logical negative_log_best_seller_rank scaled_relevance_score sold_by_amazon_logical sponsored_logical subscribe_coupon_logical subscription_available_logical, group(search_id) reverse
-
+rologit search_rank answered_questions i.best_seller_category_encoded i.department_encoded fakespot_ranking negative_log_best_seller_rank number_of_ratings scaled_relevance_score small_business standard_expected_shipping_days standard_shipping_range subscription_available, group(query_encoded) reverse
