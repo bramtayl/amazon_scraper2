@@ -36,6 +36,13 @@
 # - `four_star_percent`: The percentage of four-star reviews.
 # - `five_star_percent`: The percentage of five-star reviews.
 
+# I excluded these categories from searches:
+# - Digital_Software
+# - Digital_Video_Download
+# - Digital_Video_Games
+# - Digital_Ebook_Purchase
+# - Digital_Musis_Purchase
+
 # ```{r}
 library(ggplot2)
 library(timechange) # needed for lubridate
@@ -49,9 +56,7 @@ library(zoo, warn.conflicts = FALSE)
 # load last for select
 library(dplyr, warn.conflicts = FALSE)
 
-MAX_SPONSORED_RANK = 75
-
-search_data =
+search_data <-
     read_csv("results/search_data.csv", show_col_types = FALSE) %>%
     arrange(query, page_number, rank) %>%
     # if there are multiple sponsored listings, use the first one
@@ -62,7 +67,7 @@ search_data =
     # rerank over all pages
     arrange(query, page_number, rank) %>%
     group_by(query) %>%
-    mutate(search_rank = 1:n()) %>%
+    mutate(search_rank = seq_len(n())) %>%
     ungroup() %>%
     select(-page_number, -rank) %>%
     # reverse the order for the locf
@@ -77,7 +82,7 @@ search_data =
     # return to forward ordering
     arrange(query, search_rank)
 
-log_data = list_rbind(map(
+log_data <- list_rbind(map(
     list.files("results/product_pages"),
     function(file_name) {
         modification_time = 
@@ -91,7 +96,7 @@ log_data = list_rbind(map(
     }
 ))
 
-product_data = 
+product_data <- 
     search_data %>%
     left_join(
         read_csv("results/product_data.csv", show_col_types = FALSE) %>%
@@ -130,7 +135,7 @@ product_data =
         negative_log_best_seller_rank = -log(best_seller_rank)
     )
 
-rerank = function(data) {
+rerank <- function(data) {
     data %>%
     arrange(query, search_rank) %>%
     group_by(query) %>%
@@ -140,7 +145,7 @@ rerank = function(data) {
     ungroup()
 }
 
-complete_data = 
+complete_data <-
     product_data %>%
     select(
         ASIN,
@@ -185,7 +190,7 @@ complete_data =
     filter(complete.cases(.) & !sponsored) %>%
     rerank()
 
-model = glm(
+model <- glm(
     search_rank ~
     amazon_brand + 
     amazons_choice + 
@@ -227,19 +232,46 @@ model = glm(
 
 confint.default(model)["scaled_relevance_score",]
 
-relevance_coefficient = coef(model)[["scaled_relevance_score"]]
+relevance_coefficient <- coef(model)[["scaled_relevance_score"]]
 
-exp_relevance_coefficient = exp(relevance_coefficient)
+exp_relevance_coefficient <- exp(relevance_coefficient)
 
-unsponsored_data = 
-    search_data %>%
+duplicates_data <-
+    read_csv("results/duplicates_data.csv", show_col_types = FALSE) %>%
+    arrange(query, page_number, rank) %>%
+    # if there are multiple sponsored listings, use the first one
+    # same with unsponsored listings
+    group_by(query, ASIN, sponsored) %>%
+    slice(1) %>%
+    ungroup %>%
+    # rerank over all pages
+    arrange(query, page_number, rank) %>%
+    group_by(query) %>%
+    mutate(search_rank = seq_len(n())) %>%
+    ungroup() %>%
+    select(-page_number, -rank) %>%
+    # reverse the order for the locf
+    arrange(query, desc(search_rank)) %>%
+    group_by(query) %>%
+    mutate(
+        # locf the unsponsored listings
+        next_unsponsored_ASIN = 
+            na.locf(ifelse(sponsored, NA, ASIN), na.rm = FALSE)
+    ) %>%
+    ungroup() %>%
+    # return to forward ordering
+    arrange(query, search_rank)
+
+
+unsponsored_data <-
+    duplicates_data %>%
     select(query, ASIN, search_rank, sponsored) %>%
     filter(!sponsored) %>%
     rerank %>%
     rename(unsponsored_rank = search_rank)
 
-sponsored_data = 
-    search_data %>%
+sponsored_data <-
+    duplicates_data %>%
     select(query, ASIN, search_rank, sponsored) %>%
     pivot_wider(names_from = sponsored, values_from = search_rank) %>%
     rename(
@@ -248,7 +280,7 @@ sponsored_data =
     ) %>%
     filter(!is.na(sponsored_combined_rank)) %>%
     left_join(
-        search_data %>%
+        duplicates_data %>%
         filter(sponsored) %>%
         select(
             query,
@@ -278,39 +310,19 @@ sponsored_data =
     ) %>%
     mutate(
         relevance_boost = 
-            (log(displaced_unsponsored_rank) - log(unsponsored_rank)) / 
+            (log(displaced_unsponsored_rank) - log(unsponsored_rank)) /
             relevance_coefficient
     )
 
-percent_present = function(vector) {
+percent_present <- function(vector) {
     sum(!is.na(vector)) / length(vector) * 100
 }
 
+sum(!is.na(sponsored_data$unsponsored_rank))
 with(
     sponsored_data,
     percent_present(unsponsored_rank)
 )
-
-
-
-maximum_ranks = seq_len(400)
-maximum_rank = 10
-percent_presents = sapply(
-    maximum_ranks,
-    function(maximum_rank)
-        percent_present(
-            sponsored_data %>%
-            filter(sponsored_combined_rank <= maximum_rank) %>%
-            .$unsponsored_rank
-        )
-)
-
-ggplot(tibble(
-    `Maximum sponsored rank` = maximum_ranks,
-    `Percent with organic duplicate` = percent_presents
-)) +
-    aes(x = `Maximum sponsored rank`, y = `Percent with organic duplicate`) + 
-    geom_line()
 
 with(
     sponsored_data %>%
@@ -320,16 +332,3 @@ with(
         main = "Sponsorship boosts, for duplicated sponsored products"
     )
 )
-
-with(
-    sponsored_data %>%
-        filter(
-            !is.na(unsponsored_rank) & 
-            sponsored_combined_rank <= MAX_SPONSORED_RANK
-        ),
-    boxplot(relevance_boost,
-        ylab = "Relevance score boost equivalent, in standard deviations",
-        main = "Sponsorship boosts, for duplicated top 75 sponsored products"
-    )
-)
-

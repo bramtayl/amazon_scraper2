@@ -17,6 +17,7 @@ THREADS = 3
 inputs_folder = "inputs"
 user_agents = read_csv(path.join(inputs_folder, "user_agents.csv")).loc[:, "user_agent"]
 queries = read_csv(path.join(inputs_folder, "queries.csv")).loc[:, "query"]
+all_queries = read_csv(path.join(inputs_folder, "all_queries.csv")).loc[:, "query"]
 
 results_folder = "results"
 maybe_create(results_folder)
@@ -24,26 +25,44 @@ maybe_create(results_folder)
 search_results_folder = path.join(results_folder, "search_results")
 maybe_create(search_results_folder)
 
+duplicate_results_folder = path.join(results_folder, "duplicate_results")
+maybe_create(duplicate_results_folder)
+
 product_pages_folder = path.join(results_folder, "product_pages")
 maybe_create(product_pages_folder)
 
 search_data_file = path.join(results_folder, "search_data.csv")
+duplicates_data_file = path.join(results_folder, "duplicates_data.csv")
 product_ASINs_file = path.join(results_folder, "product_ASINs_data.csv")
+already_searched_file = path.join(results_folder, "already_searched.csv")
 
 lucene_folder = path.join(results_folder, "lucene")
 maybe_create(lucene_folder)
 
-user_agent_index = 30
+user_agent_index = 60
 
 # user_agent_index = save_search_pages(
 #     queries,
 #     search_results_folder,
+#      already_searched_file,
 #     user_agents,
 #     user_agent_index=user_agent_index,
 # )
 
-
 # combine_folder_csvs(search_results_folder).to_csv(search_data_file, index=False)
+
+
+user_agent_index = save_search_pages(
+    all_queries,
+    duplicate_results_folder,
+    already_searched_file,
+    user_agents,
+    user_agent_index=user_agent_index,
+    require_complete=True
+)
+
+
+combine_folder_csvs(duplicate_results_folder).to_csv(duplicates_data_file, index=False)
 
 # search_data = read_csv(search_data_file)
 
