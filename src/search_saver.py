@@ -79,7 +79,7 @@ def parse_search_result(query, search_result, page_number, index):
         {
             "query": [query],
             "page_number": [page_number],
-            "rank": [index + 1],
+            "page_rank": [index + 1],
             "ASIN": [ASIN],
             "sponsored": [sponsored],
             "amazon_brand": [amazon_brand],
@@ -177,7 +177,7 @@ def run_query(
             already_searched.add(query)
             return
     
-    all_together.to_csv(path.join(search_results_folder, query + ".csv"))
+    all_together.to_csv(path.join(search_results_folder, query + ".csv"), index = False)
 
 def run_query_save(
     browser,

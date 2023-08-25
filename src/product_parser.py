@@ -10,10 +10,6 @@ from src.utilities import (
 import webbrowser
 from datetime import date
 
-# convert fakespot grades to a numerical rank
-# this is still ordinal, not cardinal
-FAKESPOT_RANKINGS = {"A": 1, "B": 2, "C": 3, "D": 4, "F": 5, "?": None}
-
 
 def get_star_percent(histogram_row):
     return int(
@@ -308,7 +304,7 @@ def parse_product_page(
     climate_friendly = False
     coupon_amount = None
     coupon_percent = None
-    fakespot_ranking = None
+    fakespot_rating = None
     free_prime_shipping = False
     free_returns = False
     limited_stock = False
@@ -485,9 +481,7 @@ def parse_product_page(
 
     fakespot_widgets = product_page.select("div.fakespot-main-grade-box-wrapper")
     if fakespot_widgets:
-        fakespot_ranking = FAKESPOT_RANKINGS[
-            only(product_page.select("div#fs-letter-grade-box")).text
-        ]
+        fakespot_rating = only(product_page.select("div#fs-letter-grade-box")).text
 
     new_seller_widgets = product_page.select("div#fakespot-badge")
     if new_seller_widgets:
@@ -563,7 +557,7 @@ def parse_product_page(
                 "category": [category],
                 "climate_friendly": [climate_friendly],
                 "coupon_amount": [coupon_amount],
-                "fakespot_ranking": [fakespot_ranking],
+                "fakespot_rating": [fakespot_rating],
                 "free_prime_shipping": [free_prime_shipping],
                 "free_returns": [free_returns],
                 "limited_stock": [limited_stock],
