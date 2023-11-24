@@ -1,0 +1,310 @@
+---
+title: "Amazon's Sponsorship Boost"
+author: Brandon Taylor
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: 
+  officedown::rdocx_document:
+    tables:
+      conditional:
+        no_hband: true
+---
+
+```{r, setup, include=FALSE}
+library(officedown)
+knitr::opts_knit$set(
+    root.dir = "..",
+    fig.cap = TRUE
+)
+options(digits = 3)
+```
+
+```{r, echo = FALSE}
+library(timechange) # needed for lubridate
+library(AICcmodavg)
+library(lubridate, warn.conflicts = FALSE)
+library(ggplot2)
+library(pander)
+library(purrr)
+library(readr)
+library(stringdist, warn.conflicts = FALSE)
+library(stringi)
+library(tidyr)
+library(tools)
+library(zoo, warn.conflicts = FALSE)
+# load last for select
+library(dplyr, warn.conflicts = FALSE)
+```
+
+```{r, echo = FALSE}
+regression_data <-
+    read_csv("results/search_data.csv", show_col_types = FALSE) %>%
+    filter(!sponsored) %>%
+    # if there are multiple sponsored listings, use the first one
+    # same with organic listings
+    group_by(query, ASIN) %>%
+    arrange(page_number, page_rank) %>%
+    slice(1) %>%
+    ungroup %>%
+    # rerank over all pages
+    group_by(query) %>%
+    arrange(page_number, page_rank) %>%
+    mutate(search_rank = seq_len(n())) %>%
+    ungroup() %>%
+    select(-page_number, -page_rank) %>%
+    left_join(
+        read_csv("results/product_data.csv", show_col_types = FALSE) %>%
+        mutate(
+            # NA for 0 or negative prices
+            fakespot_rating = ifelse(
+                fakespot_rating == "?",
+                NA, fakespot_rating
+            ),
+            log_unit_price = ifelse(unit_price > 0, log(unit_price), NA),
+            discount_percent = (list_price - price) / price * 100,
+            coupon_percent = coupon_amount / price * 100,
+            log_best_seller_rank = log(best_seller_rank)
+        ),
+        by = "ASIN"
+    ) %>%
+    left_join(
+        tibble(file = list.files(
+            "results/product_pages",
+            full.names = TRUE)
+        ) %>%
+        mutate(ASIN = file_path_sans_ext(basename(file))) %>%
+        group_by(ASIN) %>%
+        summarize(
+            download_date_time = file.info(file)$mtime,
+            .groups = "drop"
+        ),
+        by = "ASIN"
+    ) %>%
+    left_join(
+        read_csv(
+            "results/relevance_data.csv",
+            show_col_types = FALSE
+        ) %>%
+            # normalize this for easier interpretation
+            mutate(scaled_relevance_score = (score - mean(score)) / sd(score)),
+        by = c("ASIN", "query")
+    ) %>%
+    mutate(
+        download_date_midnight = 
+            floor_date(download_date_time, unit = "days"),
+        time = download_date_time - download_date_midnight,
+        download_date = as.Date(download_date_midnight, tz = "BST"),
+        standard_shipping_range = 
+            standard_shipping_date_end - standard_shipping_date_start,
+        standard_expected_shipping_days = 
+            standard_shipping_date_start - download_date + 
+            standard_shipping_range / 2,
+        log_best_seller_rank = log(best_seller_rank),
+        cosine_relevance = stringdist(query, product_name, method = "lv"),
+        levenstein_relevance = stringdist(query, product_name, method = "cosine")
+    )
+```
+
+```{r, echo = FALSE}
+rerank <- function(data) {
+    data %>%
+    arrange(query, search_rank) %>%
+    group_by(query) %>%
+    mutate(
+        search_rank = seq_len(n())
+    ) %>%
+    ungroup()
+}
+```
+
+```{r, echo = FALSE}
+organic_regression_data <-
+    regression_data %>%
+    filter(!sponsored) %>%
+    filter(!duplicated(ASIN)) %>%
+    select(
+        ASIN,
+        amazon_brand,
+        amazons_choice,
+        answered_questions,
+        best_seller_category,
+        category,
+        climate_friendly,
+        cosine_relevance,
+        coupon_percent,
+        department,
+        discount_percent,
+        fakespot_rating,
+        free_returns,
+        levenstein_relevance,
+        limited_stock,
+        log_best_seller_rank,
+        log_unit_price,
+        new_seller,
+        number_of_ratings,
+        query,
+        returns,
+        scaled_relevance_score,
+        search_rank,
+        ships_from_amazon,
+        small_business,
+        sold_by_amazon,
+        sponsored,
+        standard_expected_shipping_days,
+        standard_shipping_range,
+        subscription_available,
+        subscribe_coupon,
+        time,
+        unit,
+        one_star_percent,
+        two_star_percent,
+        four_star_percent,
+        five_star_percent
+    )
+```
+
+```{r, echo = FALSE}
+complete_regression_data <-
+    organic_regression_data %>%
+    filter(complete.cases(.)) %>%
+    rerank()
+```
+
+```{r, echo = FALSE}
+full_formula <- search_rank ~
+    amazon_brand +
+    amazons_choice +
+    answered_questions +
+    best_seller_category +
+    category +
+    climate_friendly +
+    coupon_percent +
+    department +
+    discount_percent +
+    as.factor(fakespot_rating) +
+    free_returns +
+    limited_stock +
+    log_unit_price +
+    log_best_seller_rank +
+    new_seller +
+    number_of_ratings +
+    query +
+    returns +
+    scaled_relevance_score +
+    ships_from_amazon +
+    small_business +
+    sold_by_amazon +
+    standard_expected_shipping_days +
+    standard_shipping_range +
+    subscribe_coupon +
+    subscription_available +
+    time +
+    unit +
+    one_star_percent +
+    two_star_percent +
+    four_star_percent +
+    five_star_percent
+```
+
+```{r, echo = FALSE}
+lucene_model <- glm(
+    full_formula,
+    data = complete_regression_data,
+    family = poisson
+)
+```
+
+```{r, echo = FALSE}
+levenstein_model <- glm(
+    search_rank ~
+    amazon_brand +
+    amazons_choice +
+    answered_questions +
+    best_seller_category +
+    category +
+    climate_friendly +
+    coupon_percent +
+    department +
+    discount_percent +
+    as.factor(fakespot_rating) +
+    free_returns +
+    limited_stock +
+    log_unit_price +
+    log_best_seller_rank +
+    new_seller +
+    number_of_ratings +
+    query +
+    returns +
+    levenstein_relevance + # levenstein relevance
+    ships_from_amazon +
+    small_business +
+    sold_by_amazon +
+    standard_expected_shipping_days +
+    standard_shipping_range +
+    subscribe_coupon +
+    subscription_available +
+    time +
+    unit +
+    one_star_percent +
+    two_star_percent +
+    four_star_percent +
+    five_star_percent,
+    data = complete_regression_data,
+    family = poisson
+)
+```
+
+```{r, echo = FALSE}
+cosine_model <- glm(
+    search_rank ~
+    amazon_brand +
+    amazons_choice +
+    answered_questions +
+    best_seller_category +
+    category +
+    climate_friendly +
+    coupon_percent +
+    department +
+    discount_percent +
+    as.factor(fakespot_rating) +
+    free_returns +
+    limited_stock +
+    log_unit_price +
+    log_best_seller_rank +
+    new_seller +
+    number_of_ratings +
+    query +
+    returns +
+    cosine_relevance + # here
+    ships_from_amazon +
+    small_business +
+    sold_by_amazon +
+    standard_expected_shipping_days +
+    standard_shipping_range +
+    subscribe_coupon +
+    subscription_available +
+    time +
+    unit +
+    one_star_percent +
+    two_star_percent +
+    four_star_percent +
+    five_star_percent,
+    data = complete_regression_data,
+    family = poisson
+)
+```
+
+```{r}
+aictab(list(
+    cosine_model = cosine_model,
+    levenstein_model = levenstein_model,
+    lucene_model = lucene_model
+))
+```
+
+```{r}
+bictab(list(
+    cosine_model = cosine_model,
+    levenstein_model = levenstein_model,
+    lucene_model = lucene_model
+))
+```

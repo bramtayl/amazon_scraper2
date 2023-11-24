@@ -286,6 +286,7 @@ def parse_buybox(buybox, current_year):
         "unit": unit,
     }
 
+# cosine similarity and Levenshtein distance
 # product_rows = []
 # ASIN = get_filenames(product_pages_folder)[0]
 def parse_product_page(
@@ -312,6 +313,7 @@ def parse_product_page(
     new_seller = False
     number_of_ratings = 0
     price = None
+    product_name = ""
     refurbished = False
     returns = False
     rush_shipping_available = False
@@ -334,6 +336,7 @@ def parse_product_page(
     five_star_percent = None
 
     product_page = read_html(path.join(product_pages_folder, ASIN + ".html"))
+    print(ASIN)
 
     # return without doing anything for a variety of non-standard product pages
     unsupported_browser_widgets = product_page.select("h2.heading.title")
@@ -361,6 +364,8 @@ def parse_product_page(
         return
 
     department = only(department_widgets)["class"][0]
+
+    product_name = only(product_page.select("span#productTitle, span#gc-asin-title")).text
 
     category_widgets = product_page.select("div#wayfinding-breadcrumbs_feature_div a")
     if category_widgets:
@@ -566,6 +571,7 @@ def parse_product_page(
                 "new_seller": [new_seller],
                 "number_of_ratings": [number_of_ratings],
                 "price": [price],
+                "product_name": [product_name],
                 "department": [department],
                 "refurbished": [refurbished],
                 "returns": [returns],

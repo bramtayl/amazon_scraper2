@@ -1,6 +1,7 @@
 import lucene
 from os import chdir, path
 from pandas import read_csv
+import subprocess
 
 chdir("/home/brandon/amazon_scraper")
 
@@ -8,7 +9,6 @@ from src.utilities import maybe_create
 from src.search_saver import save_search_pages
 from src.product_saver import multithread_save_product_pages
 from src.product_parser import parse_product_pages
-from src.relevance import index_product_pages, get_relevance_data
 from src.utilities import combine_folder_csvs
 
 CURRENT_YEAR = 2023
@@ -36,9 +36,6 @@ duplicates_data_file = path.join(results_folder, "duplicates_data.csv")
 product_ASINs_file = path.join(results_folder, "product_ASINs_data.csv")
 already_searched_file = path.join(results_folder, "already_searched.csv")
 
-lucene_folder = path.join(results_folder, "lucene")
-maybe_create(lucene_folder)
-
 user_agent_index = 60
 
 # user_agent_index = save_search_pages(
@@ -52,23 +49,23 @@ user_agent_index = 60
 # combine_folder_csvs(search_results_folder).to_csv(search_data_file, index=False)
 
 
-user_agent_index = save_search_pages(
-    all_queries,
-    duplicate_results_folder,
-    already_searched_file,
-    user_agents,
-    user_agent_index=user_agent_index,
-    require_complete=True
-)
+# user_agent_index = save_search_pages(
+#     all_queries,
+#     duplicate_results_folder,
+#     already_searched_file,
+#     user_agents,
+#     user_agent_index=user_agent_index,
+#     require_complete=True
+# )
 
 
-combine_folder_csvs(duplicate_results_folder).to_csv(duplicates_data_file, index=False)
+# combine_folder_csvs(duplicate_results_folder).to_csv(duplicates_data_file, index=False)
 
 # search_data = read_csv(search_data_file)
 
 # search_data[["ASIN"]].drop_duplicates().to_csv(product_ASINs_file, index=False)
 
-product_data = read_csv(product_ASINs_file)
+# product_data = read_csv(product_ASINs_file)
 
 # multithread_save_product_pages(
 #     THREADS,
@@ -81,11 +78,14 @@ parse_product_pages(product_pages_folder, CURRENT_YEAR).to_csv(
     path.join(results_folder, "product_data.csv"), index = False
 )
 
+subprocess.run([
+    "docker", "run",
+    "--name", "pylucene",
+    "--mount", "type=bind,source=/home/brandon/amazon_scraper,target=/amazon_scraper",
+    "coady/pylucene",
+    "python3", "/amazon_scraper/lucene/run.py"
+])
+subprocess.run([
+    "docker", "rm", "pylucene"
+])
 
-lucene.initVM(vmargs=["-Djava.awt.headless=true"])
-
-index_product_pages(lucene_folder, product_pages_folder)
-
-get_relevance_data(lucene_folder, queries, product_data.shape[0]).to_csv(
-    path.join(results_folder, "relevance_data.csv"), index=False
-)

@@ -5,7 +5,7 @@ import lucene
 
 from bs4 import BeautifulSoup
 from java.nio.file import Paths
-from os import path
+from os import listdir, mkdir, path
 from org.apache.lucene.analysis.standard import StandardAnalyzer
 from org.apache.lucene.document import Document, Field, StringField, TextField
 from org.apache.lucene.index import DirectoryReader, IndexWriter, IndexWriterConfig
@@ -13,30 +13,33 @@ from org.apache.lucene.queryparser.classic import QueryParser
 from org.apache.lucene.search import IndexSearcher
 from org.apache.lucene.store import NIOFSDirectory
 from pandas import concat, DataFrame
-from src.utilities import get_filenames
 
+def get_filenames(folder):
+    return [path.splitext(filename)[0] for filename in listdir(folder)]
 
-def index_product_pages(lucene_folder, product_pages_folder):
+def maybe_create(folder):
+    if not path.isdir(folder):
+        mkdir(folder)
+
+def index_product_text(lucene_folder, ASIN, product_text):
     writer = IndexWriter(
         NIOFSDirectory(Paths.get(lucene_folder)), IndexWriterConfig(StandardAnalyzer())
     )
+    print(ASIN)
+    doc = Document()
+    doc.add(Field("ASIN", ASIN, StringField.TYPE_STORED))
+    doc.add(Field("product_text", product_text, TextField.TYPE_STORED))
+    writer.addDocument(doc)
+    writer.commit()
+    writer.close()
+
+
+def index_product_pages(lucene_folder, product_pages_folder):
     for ASIN in get_filenames(product_pages_folder):
-        print(ASIN)
-        doc = Document()
-        doc.add(Field("ASIN", ASIN, StringField.TYPE_STORED))
         with open(
             path.join(product_pages_folder, ASIN + ".html"), "r", encoding="UTF-8"
         ) as io:
-            doc.add(
-                Field(
-                    "product_text",
-                    BeautifulSoup(io, "lxml", from_encoding="UTF-8").prettify(),
-                    TextField.TYPE_STORED,
-                )
-            )
-        writer.addDocument(doc)
-    writer.commit()
-    writer.close()
+            index_product_text(lucene_folder, ASIN, BeautifulSoup(io, "lxml", from_encoding="UTF-8").prettify())
 
 
 def get_relevance_data(lucene_folder, queries, number_of_matches):
