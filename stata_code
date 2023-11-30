@@ -1,6 +1,0 @@
-import delimited "/home/brandon/amazon_scraper/small_filtered_data.csv"
-encode best_seller_category, generate(best_seller_category_encoded)
-encode department, generate(department_encoded)
-encode query, generate(query_encoded)
-
-rologit search_rank answered_questions i.best_seller_category_encoded i.department_encoded fakespot_rating negative_log_best_seller_rank number_of_ratings scaled_relevance_score small_business standard_expected_shipping_days standard_shipping_range subscription_available, group(query_encoded) reverse
