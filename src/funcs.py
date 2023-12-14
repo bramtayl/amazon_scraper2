@@ -19,11 +19,19 @@ from selenium.webdriver.support.expected_conditions import (
 from selenium.webdriver.support.wait import WebDriverWait as wait
 from urllib.parse import unquote
 
-LAPTOP_ID = 0
-PROFILE_FOLDER = "ztcu41pu.default-release"
+PROFILES = [
+    "wwmcnst4.default-esr",
+    "c8kfuqs1.default-esr",
+    "uei0gf7s.default-esr",
+    "ztcu41pu.default-esr"
+]
 
-DRIVER_FILE = "C:\\Users\\ucbvbta\\geckodriver.exe"
-FAKESPOT_FILE = "C:\\Users\\ucbvbta\\AppData\\Roaming\\Mozilla\\Firefox\\Profiles\\{0}\\extensions\\{44df5123-f715-9146-bfaa-c6e8d4461d44}.xpi".format(PROFILE_FOLDER)
+DRIVER_FILE = path.join(
+    "C:\\",
+    "Users",
+    "ucbvbta",
+    "geckodriver.exe"
+)
 HEADLESS = True
 NUMBER_OF_LAPTOPS = 4
 NUMBER_OF_THREADS = 2
@@ -56,6 +64,9 @@ class RegexError(Exception):
 class WentWrongError(Exception):
     pass
 
+class NoFakespotFile(Exception):
+    pass
+
 
 # throw an error if there isn't one and only one result
 # important safety measure for CSS selectors
@@ -66,7 +77,7 @@ def only(list):
     return list[0]
 
 
-def open_browser(laptop_thread_index, user_agent_index, fakespot):
+def open_browser(laptop_thread_index, fakespot_file, user_agent_index, fakespot):
     options = Options()
     # add headless to avoid the visual display and speed things up
     if HEADLESS:
@@ -81,14 +92,14 @@ def open_browser(laptop_thread_index, user_agent_index, fakespot):
     options.set_capability("pageLoadStrategy", "eager")
 
     browser = webdriver.Firefox(
-        service=Service("C:\\Users\\ucbvbta\\geckodriver.exe"), options=options
+        service=Service(DRIVER_FILE), options=options
     )
     # selenium sputters when scripts run too long so set a timeout
     browser.set_script_timeout(WAIT_TIME)
     # throw an error if we wait too long
     browser.set_page_load_timeout(WAIT_TIME)
     if fakespot:
-        browser.execute("INSTALL_ADDON", {"path": FAKESPOT_FILE, "temporary": True})
+        browser.execute("INSTALL_ADDON", {"path": fakespot_file, "temporary": True})
         # wait for fakespot to open a new tab
         wait(browser, WAIT_TIME).until(lambda browser: len(browser.window_handles) > 1)
         # close it
@@ -100,11 +111,11 @@ def open_browser(laptop_thread_index, user_agent_index, fakespot):
     return browser
 
 
-def switch_user_agent(browser, laptop_thread_index, user_agent_index, fakespot):
+def switch_user_agent(browser, laptop_thread_index, fakespot_file, user_agent_index, fakespot):
     browser.close()
     new_user_agent_index = user_agent_index + 1
     return (
-        open_browser(laptop_thread_index, user_agent_index, fakespot),
+        open_browser(laptop_thread_index, fakespot_file, user_agent_index, fakespot),
         new_user_agent_index,
     )
 
@@ -300,12 +311,29 @@ def save_search_pages(
     thread_id,
     user_agent_index=0,
 ):
+    fakespot_file = path.join(
+        "C:\\",
+        "Users",
+        "ucbvbta",
+        "AppData",
+        "Roaming",
+        "Mozilla",
+        "Firefox",
+        "Profiles",
+        PROFILES[laptop_id],
+        "extensions",
+        "{44df5123-f715-9146-bfaa-c6e8d4461d44}.xpi"
+    )
+
+    if not path.exists(fakespot_file):
+        raise NoFakespotFile(fakespot_file)
+
     laptop_thread_index = laptop_id * number_of_threads + thread_id
     queries = array_split(queries, number_of_laptops * number_of_threads)[
         laptop_thread_index
     ]
 
-    browser = open_browser(laptop_thread_index, user_agent_index, False)
+    browser = open_browser(laptop_thread_index, fakespot_file, user_agent_index, False)
     go_to_amazon(browser)
     new_browser = True
     for query in queries:
@@ -317,7 +345,7 @@ def save_search_pages(
                 new_browser = False
             except BaseException as an_error:
                 print(an_error)
-                browser, user_agent_index = switch_user_agent(browser, laptop_thread_index, user_agent_index, False)
+                browser, user_agent_index = switch_user_agent(browser, laptop_thread_index, fakespot_file, user_agent_index, False)
                 new_browser = True
                 try:
                     run_query(browser, query, search_file_name, new_browser = new_browser)
@@ -325,13 +353,10 @@ def save_search_pages(
                 except BaseException as an_error:
                     print(an_error)
 
-                
-                    
-
         if not path.exists(search_file_name):
             return
 
-        browser = open_browser(laptop_thread_index, user_agent_index, fakespot=True)
+        browser = open_browser(laptop_thread_index, fakespot_file, user_agent_index, fakespot=True)
         new_browser = True
         for ASIN in read_csv(search_file_name).loc[:, "ASIN"]:
             product_file_name = path.join(product_pages_folder, ASIN + ".html")
@@ -370,8 +395,8 @@ def multithread_save_product_pages(
     queries,
     search_results_folder,
     product_pages_folder,
+    laptop_id,
     number_of_laptops = NUMBER_OF_LAPTOPS,
-    laptop_id = LAPTOP_ID,
     number_of_threads = NUMBER_OF_THREADS
 ):
     with ThreadPoolExecutor() as executor:
